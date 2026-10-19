@@ -1,0 +1,37 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 340px;
+  height: 340px;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  cursor: default;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+#wrap { position: relative; width: 340px; height: 340px; }
+#ring { position: absolute; inset: 0; }
+
+.sector path { fill: rgba(26, 26, 30, 0.9); stroke: rgba(255, 255, 255, 0.10); stroke-width: 1; }
+.sector.hover path { fill: #ff8a1f; }
+.sector.disabled path { fill: rgba(26, 26, 30, 0.6); }
+.sector text { fill: #f4f4f4; font-size: 12px; font-weight: 600; text-anchor: middle; dominant-baseline: middle; }
+.sector .ico { font-size: 19px; font-weight: 400; }
+.sector.disabled text { fill: #7d7d7d; }
+.sector.hover text { fill: #1a1a1e; }
+.placeholder { fill: rgba(26, 26, 30, 0.55); stroke: rgba(255, 138, 31, 0.6); stroke-width: 1.5; stroke-dasharray: 6 6; fill-rule: evenodd; }
+
+#center {
+  position: absolute; left: 50%; top: 50%;
+  width: 100px; height: 100px; margin: -50px 0 0 -50px;
+  box-sizing: border-box; padding: 8px;
+  border-radius: 50%;
+  background: rgba(16, 16, 18, 0.95);
+  border: 2px solid #ff8a1f;
+  color: #fff; text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+#center.ok { border-color: #3ecf6e; }
+#center.err { border-color: #ff4d4d; }
+#ctitle { font-size: 12px; font-weight: 600; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#csub { font-size: 10px; opacity: 0.75; margin-top: 3px; max-width: 84px; line-height: 1.2; word-break: break-word; }

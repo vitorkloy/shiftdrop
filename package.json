@@ -1,0 +1,14 @@
+{
+  "name": "shiftdrop",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
