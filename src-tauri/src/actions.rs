@@ -144,3 +144,29 @@ pub fn list_actions(paths: &[PathBuf], tools: &Tools) -> Vec<ActionInfo> {
     }
     v
 }
+
+/// Setores genéricos soltáveis, usados se o caminho não chegar antes do drop.
+/// No drop, `resolve_id` troca pelo id específico do tipo real do arquivo.
+pub fn generic_actions() -> Vec<ActionInfo> {
+    let a = |id, label, icon, group| ActionInfo { id, label, icon, group, available: true, reason: None };
+    vec![
+        a("to_png", "PNG", "🖼️", "Converter"),
+        a("to_jpg", "JPG", "📷", "Converter"),
+        a("to_pdf", "PDF", "📄", "Converter"),
+        a("to_mp4", "MP4", "🎬", "Converter"),
+        a("to_mp3", "MP3", "🎵", "Converter"),
+        a("compress", "Comprimir", "🗜️", "Editar"),
+    ]
+}
+
+/// Mapeia um id genérico para o id concreto do tipo dos arquivos.
+pub fn resolve_id(id: &str, paths: &[PathBuf]) -> String {
+    match (id, common_kind(paths)) {
+        ("compress", Some(Kind::Image)) => "compress_image".into(),
+        ("compress", Some(Kind::Video)) => "compress_video".into(),
+        ("compress", Some(Kind::Audio)) => "compress_audio".into(),
+        ("to_pdf", Some(Kind::Doc)) => "doc_to_pdf".into(),
+        ("to_mp3", Some(Kind::Video)) => "extract_mp3".into(),
+        _ => id.to_string(),
+    }
+}

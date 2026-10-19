@@ -4,11 +4,14 @@ pub mod convert;
 pub mod pdf;
 pub mod tools;
 
+mod drag;
 mod gesture;
+mod selftest;
 mod glass;
 mod tray;
 
 use std::path::PathBuf;
+use tauri::Manager;
 
 fn to_paths(v: Vec<String>) -> Vec<PathBuf> {
     v.into_iter().map(PathBuf::from).collect()
@@ -17,6 +20,12 @@ fn to_paths(v: Vec<String>) -> Vec<PathBuf> {
 #[tauri::command]
 fn list_actions(paths: Vec<String>) -> Vec<actions::ActionInfo> {
     actions::list_actions(&to_paths(paths), &tools::Tools::detect())
+}
+
+/// Setores genéricos (quando o tipo do arquivo ainda não é conhecido).
+#[tauri::command]
+fn generic_actions() -> Vec<actions::ActionInfo> {
+    actions::generic_actions()
 }
 
 #[tauri::command]
@@ -50,7 +59,17 @@ async fn thumbnail(path: String) -> Option<String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
-        .invoke_handler(tauri::generate_handler![list_actions, run_action, hide_radial, thumbnail])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(e) = event {
+                drag::forward(window.app_handle(), window.label(), e);
+            }
+        })
+        .on_webview_event(|webview, event| {
+            if let tauri::WebviewEvent::DragDrop(e) = event {
+                drag::forward(webview.app_handle(), webview.label(), e);
+            }
+        })
+        .invoke_handler(tauri::generate_handler![list_actions, generic_actions, run_action, hide_radial, thumbnail])
         .setup(|app| {
             tray::build(app)?;
             gesture::spawn(app.handle().clone());
@@ -67,6 +86,8 @@ pub fn run() {
                     }
                 }
                 gesture::preview(app.handle(), paths, hover);
+            } else if args.first().map(|a| a == "selftest-drag").unwrap_or(false) && args.len() >= 2 {
+                selftest::start(app.handle(), args[1].clone(), args.iter().any(|a| a == "--drop"));
             }
             Ok(())
         })

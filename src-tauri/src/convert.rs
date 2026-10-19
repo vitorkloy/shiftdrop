@@ -28,6 +28,8 @@ pub fn run_action(id: &str, paths: &[PathBuf], tools: &Tools) -> R<Vec<PathBuf>>
             return Err(format!("arquivo não encontrado: {}", p.display()));
         }
     }
+    let resolved = actions::resolve_id(id, paths);
+    let id = resolved.as_str();
     let list = actions::list_actions(paths, tools);
     let a = list
         .iter()

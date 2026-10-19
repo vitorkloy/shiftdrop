@@ -209,3 +209,23 @@ fn docx_to_pdf_if_libreoffice() {
     let pdf = one("doc_to_pdf", &txt, &t);
     assert!(std::fs::read(pdf).unwrap().starts_with(b"%PDF"));
 }
+
+#[test]
+fn extensions_are_case_insensitive_and_generic_ids_resolve() {
+    use shiftdrop_lib::actions::{kind_of, resolve_id, Kind};
+    for n in ["cat6.jpeg", "cat6.JPEG", "a.JPG", "b.Jpg", "c.PNG", "d.WebP"] {
+        assert_eq!(kind_of(Path::new(n)), Kind::Image, "{n}");
+    }
+    let none = Tools::default();
+    let a = list_actions(&[PathBuf::from(r"C:\fotos\cat6.JPEG")], &none);
+    assert!(!a.is_empty() && !ids(&a).contains(&"to_jpg"), "JPEG maiúsculo = jpg");
+    assert_eq!(resolve_id("compress", &[PathBuf::from("x.MP4")]), "compress_video");
+    assert_eq!(resolve_id("to_mp3", &[PathBuf::from("x.mov")]), "extract_mp3");
+    assert_eq!(resolve_id("to_pdf", &[PathBuf::from("x.DOCX")]), "doc_to_pdf");
+    // Ação genérica roda de verdade num arquivo real.
+    let t = Tools::detect();
+    let d = tmpdir("generic");
+    let png = make_png(&d, "Gato.PNG", 64, 64);
+    let out = run_action("compress", &[png], &t).unwrap();
+    ok_file(&out[0]);
+}

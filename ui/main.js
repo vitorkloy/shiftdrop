@@ -189,7 +189,8 @@ function hideSoon(ms) { clearTimeout(hideTimer); hideTimer = setTimeout(hide, ms
 async function onEnter(paths) {
   clearTimeout(hideTimer);
   currentPaths = paths;
-  actions = paths.length ? await invoke("list_actions", { paths }) : [];
+  // Sem caminho (não deveria acontecer): setores genéricos, resolvidos no drop.
+  actions = paths.length ? await invoke("list_actions", { paths }) : await invoke("generic_actions");
   groups = [];
   actions.forEach((a, i) => {
     const last = groups[groups.length - 1];
@@ -200,6 +201,7 @@ async function onEnter(paths) {
   rot = twoRings ? -((groups[0].first + groups[0].last) / 2) * ((2 * Math.PI) / actions.length) : 0;
   hover = -1;
   if (!actions.length) idle = ["Sem ações", "Tipo não suportado", "err"];
+  else if (!paths.length) idle = ["Arquivo", "Escolha uma opção", ""];
   else idle = [paths.length > 1 ? `${paths.length} arquivos` : basename(paths[0]), "Escolha uma opção", ""];
   render();
   setThumbIcon("file", ext(paths[0] || ""));
@@ -234,18 +236,20 @@ async function onDrop(paths, idx) {
   hideSoon(1800);
 }
 
-T.webview.getCurrentWebview().onDragDropEvent(async (ev) => {
+// Eventos de arrastar vêm do Rust (drag.rs), já com os caminhos no "enter".
+T.event.listen("sd-drag", async (ev) => {
   const p = ev.payload;
   if (busy) return;
   if (p.type === "enter") {
     await onEnter(p.paths || []);
     setHover(hitTest(p.position));
   } else if (p.type === "over") {
+    if (!actions.length && !currentPaths.length) await onEnter([]);
     setHover(hitTest(p.position));
   } else if (p.type === "leave") {
     setHover(-1);
   } else if (p.type === "drop") {
-    await onDrop(p.paths || currentPaths, hitTest(p.position));
+    await onDrop(p.paths && p.paths.length ? p.paths : currentPaths, hitTest(p.position));
   }
 });
 

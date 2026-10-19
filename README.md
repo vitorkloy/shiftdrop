@@ -6,6 +6,8 @@ Feito com Tauri v2 (Rust + HTML/JS simples). Roda na bandeja do sistema.
 
 ![Menu radial do exe empacotado: imagem (2 anéis) e vídeo (1 anel)](docs/menu-radial.png)
 
+![Autoteste OLE: setores montados no DragEnter e conversão após o Drop](docs/drag-ole-teste.png)
+
 Visual no estilo Tangerine/macOS: disco de vidro com desfoque real (acrylic do Windows) recortado em círculo, sombra suave, setores sólidos com ícone + rótulo, destaque azul suave sob o cursor, miniatura do arquivo no centro e entrada em 150 ms (escala + fade). Com muitas ações, o anel interno mostra as categorias (Converter / Editar) e o externo, as ações.
 
 ## O que ele faz
@@ -59,6 +61,11 @@ npm install
 npm run dev        # roda o app
 npm test           # testes de conversão de ponta a ponta (geram arquivos reais)
 npm run build      # gera o instalador NSIS em src-tauri/target/release/bundle/nsis
+```n
+Autoteste do arrastar (OLE de verdade, sem mouse): abre o overlay, cria o IDataObject do Shell (CF_HDROP) para o arquivo e chama DragEnter/DragOver/Drop no drop target do overlay. Log em `%TEMP%\shiftdrop-drag.log`.
+
+```powershell
+shiftdrop.exe selftest-drag C:\caminho\cat6.JPEG --drop   # solta no setor do topo (WEBP para imagens)
 ```
 
 ## Como funciona o gesto
