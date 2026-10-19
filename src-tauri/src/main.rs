@@ -4,7 +4,7 @@
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let Some(first) = args.first() {
-        if matches!(first.as_str(), "tools" | "actions" | "convert" | "help" | "--help" | "-h") {
+        if matches!(first.as_str(), "tools" | "actions" | "wheels" | "convert" | "help" | "--help" | "-h") {
             std::process::exit(shiftdrop_lib::cli::run(&args));
         }
     }

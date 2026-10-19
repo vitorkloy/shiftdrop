@@ -29,6 +29,11 @@ pub fn run(args: &[String]) -> i32 {
             println!("{}", serde_json::to_string_pretty(&list).unwrap());
             0
         }
+        Some("wheels") if args.len() >= 2 => {
+            let w = crate::wheels::wheels(&paths(&args[1..]), &tools);
+            println!("{}", serde_json::to_string_pretty(&w).unwrap());
+            0
+        }
         Some("convert") if args.len() >= 3 => match convert::run_action(&args[1], &paths(&args[2..]), &tools) {
             Ok(outs) => {
                 for o in outs {
@@ -42,7 +47,7 @@ pub fn run(args: &[String]) -> i32 {
             }
         },
         _ => {
-            eprintln!("uso: shiftdrop tools | actions <arquivos...> | convert <acao> <arquivos...>");
+            eprintln!("uso: shiftdrop tools | actions <arquivos...> | wheels <arquivos...> | convert <acao> <arquivos...>");
             2
         }
     }

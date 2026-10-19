@@ -3,6 +3,8 @@ pub mod cli;
 pub mod convert;
 pub mod pdf;
 pub mod tools;
+pub mod wheels;
+pub mod fileactions;
 
 mod catcher;
 mod drag;
@@ -22,6 +24,14 @@ fn to_paths(v: Vec<String>) -> Vec<PathBuf> {
 #[tauri::command]
 fn list_actions(paths: Vec<String>) -> Vec<actions::ActionInfo> {
     actions::list_actions(&to_paths(paths), &tools::Tools::detect())
+}
+
+/// As três rodas (convert/tools/actions) para os arquivos arrastados (vazio = genéricas).
+#[tauri::command]
+async fn wheels(paths: Vec<String>) -> wheels::Wheels {
+    tauri::async_runtime::spawn_blocking(move || wheels::wheels(&to_paths(paths), &tools::Tools::detect()))
+        .await
+        .unwrap_or_else(|_| wheels::wheels(&[], &tools::Tools::default()))
 }
 
 /// Setores genéricos (quando o tipo do arquivo ainda não é conhecido).
@@ -87,7 +97,7 @@ pub fn run() {
                 drag::forward(webview.app_handle(), webview.label(), e);
             }
         })
-        .invoke_handler(tauri::generate_handler![js_log, list_actions, generic_actions, run_action, hide_radial, thumbnail])
+        .invoke_handler(tauri::generate_handler![js_log, wheels, list_actions, generic_actions, run_action, hide_radial, thumbnail])
         .setup(|app| {
             logx::log(format!(
                 "==== ShiftDrop {} iniciado: exe={:?} pid={} args={:?}",
@@ -103,16 +113,19 @@ pub fn run() {
             let args: Vec<String> = std::env::args().skip(1).collect();
             if args.first().map(|a| a == "preview").unwrap_or(false) {
                 let mut hover = -1;
+                let mut mode = String::from("convert");
                 let mut paths = Vec::new();
                 let mut it = args.into_iter().skip(1);
                 while let Some(a) = it.next() {
                     if a == "--hover" {
                         hover = it.next().and_then(|n| n.parse().ok()).unwrap_or(-1);
+                    } else if a == "--mode" {
+                        mode = it.next().unwrap_or(mode);
                     } else {
                         paths.push(a);
                     }
                 }
-                gesture::preview(app.handle(), paths, hover);
+                gesture::preview(app.handle(), paths, hover, mode);
             } else if args.first().map(|a| a == "selftest-drag").unwrap_or(false) && args.len() >= 2 {
                 selftest::start(app.handle(), args[1].clone(), args.iter().any(|a| a == "--drop"));
             }

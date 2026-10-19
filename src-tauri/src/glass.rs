@@ -43,8 +43,8 @@ pub fn apply(window: &tauri::WebviewWindow) {
         }
         let Some(f) = GetProcAddress(module, b"SetWindowCompositionAttribute\0".as_ptr()) else { return };
         let set: SetWca = std::mem::transmute(f);
-        // Cor em ABGR: tom grafite leve; o resto do escurecimento vem do CSS.
-        let mut accent = AccentPolicy { state: 4, flags: 0, gradient: 0x3A1E1A18, animation: 0 };
+        // Cor em ABGR: cinza-claro do Tangerine (#e5e7e9, ~60%); o relevo vem do CSS/SVG.
+        let mut accent = AccentPolicy { state: 4, flags: 0, gradient: 0x99E9E7E5, animation: 0 };
         let mut data = CompAttrData {
             attrib: 19, // WCA_ACCENT_POLICY
             data: &mut accent as *mut _ as *mut c_void,

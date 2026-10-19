@@ -33,16 +33,16 @@ pub fn start(app: &AppHandle, file: String, do_drop: bool) {
         crate::gesture::show_radial(&app, x, y, false);
         std::thread::sleep(Duration::from_millis(500));
 
-        // Ponto alvo: 140 px (lógicos) acima do centro do overlay = setor do topo.
+        // Ponto alvo: 95 px (lógicos) acima do centro do overlay = setor do topo.
         let (px, py) = app
             .get_webview_window("radial")
             .and_then(|w| {
                 let pos = w.outer_position().ok()?;
                 let size = w.outer_size().ok()?;
                 let sc = w.scale_factor().unwrap_or(1.0);
-                Some((pos.x + size.width as i32 / 2, pos.y + size.height as i32 / 2 - (140.0 * sc) as i32))
+                Some((pos.x + size.width as i32 / 2, pos.y + size.height as i32 / 2 - (95.0 * sc) as i32))
             })
-            .unwrap_or((x, y - 140));
+            .unwrap_or((x, y - 95));
 
         let step = |name: &'static str, f: Box<dyn FnOnce() -> String + Send>| {
             let (tx, rx) = std::sync::mpsc::channel();

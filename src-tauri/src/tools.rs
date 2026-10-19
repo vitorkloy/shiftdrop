@@ -10,6 +10,11 @@ pub struct Tools {
     pub ffprobe: Option<PathBuf>,
     pub magick: Option<PathBuf>,
     pub soffice: Option<PathBuf>,
+    pub pandoc: Option<PathBuf>,
+    /// Ghostscript (PDF → imagem, comprimir PDF).
+    pub gs: Option<PathBuf>,
+    /// tar.exe do Windows (bsdtar): zip/tar/gz.
+    pub tar: Option<PathBuf>,
 }
 
 impl Tools {
@@ -22,7 +27,10 @@ impl Tools {
             .or_else(|| find("ffprobe", &[]));
         let magick = find("magick", &program_files_glob("ImageMagick", "magick.exe"));
         let soffice = find("soffice", &soffice_fallbacks());
-        Tools { ffmpeg, ffprobe, magick, soffice }
+        let pandoc = find("pandoc", &program_files_glob("Pandoc", "pandoc.exe"));
+        let gs = find("gswin64c", &[]).or_else(|| find("gs", &[]));
+        let tar = find("tar", &[PathBuf::from(r"C:\Windows\System32\tar.exe")]);
+        Tools { ffmpeg, ffprobe, magick, soffice, pandoc, gs, tar }
     }
 }
 

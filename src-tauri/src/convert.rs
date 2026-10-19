@@ -13,13 +13,20 @@ use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-type R<T> = Result<T, String>;
+pub(crate) type R<T> = Result<T, String>;
+
+/// Formatos de imagem lidos sem ImageMagick.
+pub(crate) const NATIVE_READ: &[&str] = &["png", "jpg", "webp", "bmp", "gif", "tiff", "ico"];
 
 fn es<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
 pub fn run_action(id: &str, paths: &[PathBuf], tools: &Tools) -> R<Vec<PathBuf>> {
+    if id.contains(':') {
+        // Ids das rodas (conv:/tool:/act:) — ver wheels.rs.
+        return crate::wheels::run(id, paths, tools);
+    }
     if paths.is_empty() {
         return Err("nenhum arquivo".into());
     }
@@ -88,7 +95,7 @@ pub fn run_action(id: &str, paths: &[PathBuf], tools: &Tools) -> R<Vec<PathBuf>>
     }
 }
 
-fn each<F: FnMut(&Path) -> R<PathBuf>>(paths: &[PathBuf], mut f: F) -> R<Vec<PathBuf>> {
+pub(crate) fn each<F: FnMut(&Path) -> R<PathBuf>>(paths: &[PathBuf], mut f: F) -> R<Vec<PathBuf>> {
     paths
         .iter()
         .map(|p| f(p).map_err(|e| format!("{}: {e}", file_name(p))))
@@ -117,7 +124,7 @@ pub fn unique_out(input: &Path, suffix: &str, ext: &str) -> PathBuf {
     unique_path(dir, &format!("{stem}{suffix}"), ext)
 }
 
-fn temp_file(ext: &str) -> PathBuf {
+pub(crate) fn temp_file(ext: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -131,13 +138,13 @@ fn temp_file(ext: &str) -> PathBuf {
     ))
 }
 
-fn os(s: impl AsRef<OsStr>) -> OsString {
+pub(crate) fn os(s: impl AsRef<OsStr>) -> OsString {
     s.as_ref().to_owned()
 }
 
 // ---------- imagens ----------
 
-fn load_image(p: &Path, tools: &Tools) -> R<DynamicImage> {
+pub(crate) fn load_image(p: &Path, tools: &Tools) -> R<DynamicImage> {
     let native = ImageReader::open(p)
         .map_err(es)?
         .with_guessed_format()
@@ -196,7 +203,7 @@ fn save_webp(img: &DynamicImage, out: &Path, tools: &Tools) -> R<()> {
         .map_err(es)
 }
 
-fn save_image(img: &DynamicImage, out: &Path, ext: &str, tools: &Tools) -> R<()> {
+pub(crate) fn save_image(img: &DynamicImage, out: &Path, ext: &str, tools: &Tools) -> R<()> {
     match ext {
         "jpg" => save_jpeg(img, out, 90),
         "webp" => save_webp(img, out, tools),
@@ -206,7 +213,7 @@ fn save_image(img: &DynamicImage, out: &Path, ext: &str, tools: &Tools) -> R<()>
     }
 }
 
-fn writable_ext(p: &Path) -> &'static str {
+pub(crate) fn writable_ext(p: &Path) -> &'static str {
     match actions::ext_of(p).as_str() {
         "jpg" | "jpeg" | "jfif" => "jpg",
         "webp" => "webp",
@@ -216,7 +223,7 @@ fn writable_ext(p: &Path) -> &'static str {
     }
 }
 
-fn convert_image(p: &Path, ext: &str, tools: &Tools) -> R<PathBuf> {
+pub(crate) fn convert_image(p: &Path, ext: &str, tools: &Tools) -> R<PathBuf> {
     let img = load_image(p, tools)?;
     let out = unique_out(p, "", ext);
     save_image(&img, &out, ext, tools).inspect_err(|_| {
@@ -225,7 +232,7 @@ fn convert_image(p: &Path, ext: &str, tools: &Tools) -> R<PathBuf> {
     Ok(out)
 }
 
-fn images_to_pdf(paths: &[PathBuf], tools: &Tools) -> R<PathBuf> {
+pub(crate) fn images_to_pdf(paths: &[PathBuf], tools: &Tools) -> R<PathBuf> {
     let mut pages = Vec::with_capacity(paths.len());
     for p in paths {
         let img = load_image(p, tools).map_err(|e| format!("{}: {e}", file_name(p)))?;
@@ -269,15 +276,15 @@ pub fn thumbnail_png(p: &Path, tools: &Tools, size: u32) -> Option<Vec<u8>> {
 
 // ---------- vídeo / áudio (ffmpeg) ----------
 
-const MP4: &[&str] = &[
+pub(crate) const MP4: &[&str] = &[
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
     "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart",
 ];
-const WEBM: &[&str] = &[
+pub(crate) const WEBM: &[&str] = &[
     "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "33", "-deadline", "realtime", "-cpu-used", "8",
     "-row-mt", "1", "-c:a", "libopus", "-b:a", "128k",
 ];
-const GIF: &[&str] = &[
+pub(crate) const GIF: &[&str] = &[
     "-an", "-vf",
     "fps=12,scale='min(640,iw)':-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
     "-loop", "0",
@@ -286,16 +293,16 @@ const VIDEO_COMPRESS: &[&str] = &[
     "-c:v", "libx264", "-preset", "medium", "-crf", "28", "-pix_fmt", "yuv420p",
     "-vf", "scale='trunc(min(1920,iw)/2)*2':-2", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
 ];
-const MP3: &[&str] = &["-vn", "-c:a", "libmp3lame", "-q:a", "2"];
-const WAV: &[&str] = &["-vn", "-c:a", "pcm_s16le"];
-const OGG: &[&str] = &["-vn", "-c:a", "libvorbis", "-q:a", "5"];
+pub(crate) const MP3: &[&str] = &["-vn", "-c:a", "libmp3lame", "-q:a", "2"];
+pub(crate) const WAV: &[&str] = &["-vn", "-c:a", "pcm_s16le"];
+pub(crate) const OGG: &[&str] = &["-vn", "-c:a", "libvorbis", "-q:a", "5"];
 const AUDIO_COMPRESS: &[&str] = &["-vn", "-c:a", "libmp3lame", "-b:a", "96k"];
 
-fn ff_base() -> Vec<OsString> {
+pub(crate) fn ff_base() -> Vec<OsString> {
     ["-y", "-hide_banner", "-loglevel", "error", "-nostdin"].iter().map(os).collect()
 }
 
-fn ffmpeg_run(tools: &Tools, args: Vec<OsString>, out: &Path) -> R<PathBuf> {
+pub(crate) fn ffmpeg_run(tools: &Tools, args: Vec<OsString>, out: &Path) -> R<PathBuf> {
     let ff = tools.ffmpeg.as_ref().ok_or("ffmpeg não encontrado")?;
     match run_tool(ff, &args) {
         Ok(_) if out.is_file() => Ok(out.to_path_buf()),
@@ -307,7 +314,7 @@ fn ffmpeg_run(tools: &Tools, args: Vec<OsString>, out: &Path) -> R<PathBuf> {
     }
 }
 
-fn ff_one(tools: &Tools, p: &Path, suffix: &str, ext: &str, opts: &[&str]) -> R<PathBuf> {
+pub(crate) fn ff_one(tools: &Tools, p: &Path, suffix: &str, ext: &str, opts: &[&str]) -> R<PathBuf> {
     let out = unique_out(p, suffix, ext);
     let mut args = ff_base();
     args.push(os("-i"));
@@ -317,7 +324,7 @@ fn ff_one(tools: &Tools, p: &Path, suffix: &str, ext: &str, opts: &[&str]) -> R<
     ffmpeg_run(tools, args, &out)
 }
 
-fn ffprobe(tools: &Tools, p: &Path, args: &[&str]) -> Option<String> {
+pub(crate) fn ffprobe(tools: &Tools, p: &Path, args: &[&str]) -> Option<String> {
     let probe = tools.ffprobe.as_ref()?;
     let mut a: Vec<OsString> = ["-v", "error"].iter().map(os).collect();
     a.extend(args.iter().map(os));
@@ -336,7 +343,7 @@ pub fn probe_duration(tools: &Tools, p: &Path) -> Option<f64> {
     ffprobe(tools, p, &["-show_entries", "format=duration", "-of", "csv=p=0"])?.lines().next()?.trim().parse().ok()
 }
 
-fn has_audio(tools: &Tools, p: &Path) -> bool {
+pub(crate) fn has_audio(tools: &Tools, p: &Path) -> bool {
     ffprobe(tools, p, &["-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0"])
         .map(|s| !s.is_empty())
         .unwrap_or(false)
@@ -399,6 +406,11 @@ fn merge_audio(paths: &[PathBuf], tools: &Tools) -> R<PathBuf> {
 // ---------- documentos (LibreOffice) ----------
 
 fn doc_to_pdf(p: &Path, tools: &Tools) -> R<PathBuf> {
+    soffice_convert(p, "pdf", "pdf", tools)
+}
+
+/// Converte com o LibreOffice (`--convert-to <filtro>`), saída `<nome>.<ext>` na mesma pasta.
+pub(crate) fn soffice_convert(p: &Path, filter: &str, out_ext: &str, tools: &Tools) -> R<PathBuf> {
     let soffice = tools.soffice.as_ref().ok_or("LibreOffice não encontrado")?;
     let tmpdir = temp_file("lo");
     std::fs::create_dir_all(&tmpdir).map_err(es)?;
@@ -410,25 +422,45 @@ fn doc_to_pdf(p: &Path, tools: &Tools) -> R<PathBuf> {
         os("--headless"),
         os("--norestore"),
         os("--convert-to"),
-        os("pdf"),
+        os(filter),
         os("--outdir"),
         os(&tmpdir),
         os(p),
     ];
     let r = run_tool(soffice, &args);
     let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let produced = tmpdir.join(format!("{stem}.pdf"));
+    let produced = tmpdir.join(format!("{stem}.{out_ext}"));
     let result = match r {
         Ok(_) if produced.is_file() => {
-            let out = unique_out(p, "", "pdf");
+            let out = unique_out(p, "", out_ext);
             std::fs::rename(&produced, &out)
                 .or_else(|_| std::fs::copy(&produced, &out).map(|_| ()))
                 .map_err(es)
                 .map(|_| out)
         }
-        Ok(_) => Err("LibreOffice não gerou o PDF".into()),
+        Ok(_) => Err("LibreOffice não gerou o arquivo".into()),
         Err(e) => Err(e),
     };
     let _ = std::fs::remove_dir_all(&tmpdir);
     result
+}
+
+/// Remove EXIF/metadados regravando a imagem (ImageMagick -strip quando houver).
+pub(crate) fn strip_image_metadata(p: &Path, tools: &Tools) -> R<PathBuf> {
+    let ext = crate::wheels::fmt_of(p);
+    if let Some(m) = &tools.magick {
+        let out = unique_out(p, "-sem-metadados", &ext);
+        if run_tool(m, &[os(p), os("-strip"), os(&out)]).is_ok() && out.is_file() {
+            return Ok(out);
+        }
+    }
+    let img = load_image(p, tools)?;
+    let e = writable_ext(p);
+    let out = unique_out(p, "-sem-metadados", e);
+    save_image(&img, &out, e, tools)?;
+    Ok(out)
+}
+
+pub(crate) fn audio_channels(tools: &Tools, p: &Path) -> Option<u32> {
+    ffprobe(tools, p, &["-select_streams", "a:0", "-show_entries", "stream=channels", "-of", "csv=p=0"])?.lines().next()?.trim().parse().ok()
 }

@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize};
 
 pub fn show_radial(app: &AppHandle, x: i32, y: i32, manual: bool) {
     let Some(win) = app.get_webview_window("radial") else { return };
-    let size = win.outer_size().unwrap_or(PhysicalSize::new(380, 380));
+    let size = win.outer_size().unwrap_or(PhysicalSize::new(290, 290));
     let (w, h) = (size.width as i32, size.height as i32);
     let (mut px, mut py) = (x - w / 2, y - h / 2);
     if let Ok(mons) = win.available_monitors() {
@@ -46,9 +46,9 @@ pub fn hide_radial(app: &AppHandle) {
     }
 }
 
-/// Modo de demonstração: `shiftdrop.exe preview <arquivos...> [--hover N]` abre o menu
+/// Modo de demonstração: `shiftdrop.exe preview <arquivos...> [--mode convert|tools|actions] [--hover N]` abre o menu
 /// no centro da tela já com os arquivos "arrastados" (usado para capturas/QA).
-pub fn preview(app: &AppHandle, paths: Vec<String>, hover: i32) {
+pub fn preview(app: &AppHandle, paths: Vec<String>, hover: i32, mode: String) {
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(1200));
@@ -60,7 +60,7 @@ pub fn preview(app: &AppHandle, paths: Vec<String>, hover: i32) {
             .unwrap_or((800, 450));
         show_radial(&app, x, y, false);
         std::thread::sleep(std::time::Duration::from_millis(300));
-        let _ = app.emit("radial-preview", serde_json::json!({ "paths": paths, "hover": hover }));
+        let _ = app.emit("radial-preview", serde_json::json!({ "paths": paths, "hover": hover, "mode": mode }));
     });
 }
 
@@ -80,7 +80,7 @@ mod imp {
     use tauri::{AppHandle, Emitter};
     use windows_sys::Win32::Foundation::{CloseHandle, POINT};
     use windows_sys::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION};
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_SHIFT};
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL, VK_LBUTTON, VK_MENU, VK_SHIFT};
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetAncestor, GetCursorPos, GetWindowThreadProcessId, WindowFromPoint, GA_ROOT};
 
     /// Processos de onde um arraste de arquivo pode começar.
@@ -97,6 +97,23 @@ mod imp {
         "dopus.exe",
     ];
     const THRESHOLD_PX: i32 = 12;
+    /// Roda de cada tecla: Shift = converter, Ctrl = ferramentas, Alt = ações.
+    const MODES: [(&str, &str); 3] = [("convert", "Shift"), ("tools", "Ctrl"), ("actions", "Alt")];
+
+    /// Teclas das rodas. Trocáveis por SHIFTDROP_KEYS=convert,tools,actions com
+    /// nomes shift/ctrl/alt (ex. "ctrl,shift,alt").
+    fn wheel_keys() -> [u16; 3] {
+        let code = |n: &str| match n.trim().to_ascii_lowercase().as_str() {
+            "shift" => Some(VK_SHIFT),
+            "ctrl" | "control" => Some(VK_CONTROL),
+            "alt" => Some(VK_MENU),
+            _ => None,
+        };
+        let def = [VK_SHIFT, VK_CONTROL, VK_MENU];
+        let Ok(v) = std::env::var("SHIFTDROP_KEYS") else { return def };
+        let ks: Vec<u16> = v.split(',').filter_map(code).collect();
+        if ks.len() == 3 { [ks[0], ks[1], ks[2]] } else { def }
+    }
 
     pub fn cursor_pos() -> (i32, i32) {
         let mut p = POINT { x: 0, y: 0 };
@@ -153,29 +170,43 @@ mod imp {
                 let mut armed = false;
                 let mut shown = false;
                 let mut origin = (0, 0);
+                // Estado anterior de Shift/Ctrl/Alt (para detectar o "toque" na tecla).
+                let mut prev = [false; 3];
+                let keys = wheel_keys();
                 loop {
                     std::thread::sleep(Duration::from_millis(15));
                     let left = pressed(VK_LBUTTON);
+                    let now = [pressed(keys[0]), pressed(keys[1]), pressed(keys[2])];
+                    let tapped = (0..3).find(|&i| now[i] && !prev[i]);
+                    let held = (0..3).find(|&i| now[i]);
+                    prev = now;
                     if left && !down {
                         down = true;
                         origin = cursor_pos();
                         armed = is_file_source(origin.0, origin.1);
-                        if armed && pressed(VK_SHIFT) {
-                            crate::logx::log(format!("gesto: clique com Shift em gerenciador de arquivos em {:?}", origin));
-                        }
                     } else if left && down {
-                        if armed && !shown && pressed(VK_SHIFT) {
-                            let (x, y) = cursor_pos();
-                            let (dx, dy) = (x - origin.0, y - origin.1);
-                            if dx * dx + dy * dy > THRESHOLD_PX * THRESHOLD_PX {
-                                shown = true;
-                                crate::logx::log(format!(
-                                    "gesto: Shift+arrastar detectado (origem {:?} -> {:?}, processo {:?})",
-                                    origin,
-                                    (x, y),
-                                    process_name_at(origin.0, origin.1)
-                                ));
-                                show_radial(&app, x, y, false);
+                        if armed && !shown {
+                            // "Start dragging, then tap a key": abre quando há arraste e uma das teclas está pressionada.
+                            if let Some(k) = held {
+                                let (x, y) = cursor_pos();
+                                let (dx, dy) = (x - origin.0, y - origin.1);
+                                if dx * dx + dy * dy > THRESHOLD_PX * THRESHOLD_PX {
+                                    shown = true;
+                                    crate::logx::log(format!(
+                                        "gesto: arrastar + {} detectado (origem {:?} -> {:?}, processo {:?})",
+                                        MODES[k].1,
+                                        origin,
+                                        (x, y),
+                                        process_name_at(origin.0, origin.1)
+                                    ));
+                                    show_radial(&app, x, y, false);
+                                    let _ = app.emit("wheel-mode", serde_json::json!({ "mode": MODES[k].0 }));
+                                }
+                            }
+                        } else if shown {
+                            if let Some(k) = tapped {
+                                crate::logx::log(format!("gesto: tecla {} → roda {}", MODES[k].1, MODES[k].0));
+                                let _ = app.emit("wheel-mode", serde_json::json!({ "mode": MODES[k].0 }));
                             }
                         }
                     } else if !left && down {

@@ -1,59 +1,112 @@
+/* ShiftDrop — roda no estilo Tangerine (valores do tangerineformac.com).
+   Sem botões magnéticos e sem cursor customizado. */
 :root {
-  --accent: rgba(10, 132, 255, 0.86);
-  --accent-soft: rgba(10, 132, 255, 0.28);
-  --seg: rgba(255, 255, 255, 0.075);
-  --seg-inner: rgba(255, 255, 255, 0.045);
-  --text: rgba(255, 255, 255, 0.94);
-  --text-dim: rgba(255, 255, 255, 0.55);
+  --orange: #ff5200;
+  --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
 }
 html, body {
-  margin: 0; padding: 0; width: 380px; height: 380px; overflow: hidden;
-  background: transparent; user-select: none; cursor: default;
-  font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  font-family: var(--font);
 }
-#root { position: relative; width: 380px; height: 380px; opacity: 0; }
-#root.in { animation: pop 150ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
-@keyframes pop { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
-
-/* Disco de vidro: o desfoque real vem do acrylic do Windows; aqui só tinta e brilho de borda. */
-#disk {
-  position: absolute; inset: 0; border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, rgba(52, 52, 58, 0.50), rgba(24, 24, 28, 0.62) 70%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+#root {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  transform-origin: 50% 50%;
 }
-#ring { position: absolute; inset: 0; }
-
-.seg path { fill: var(--seg); transition: fill 90ms ease-out; }
-.seg.hover path { fill: var(--accent); }
-.seg.disabled path { fill: rgba(255, 255, 255, 0.03); }
-.seg .icon { fill: none; stroke: var(--text); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.seg text { fill: var(--text); font-size: 11.5px; font-weight: 600; text-anchor: middle; dominant-baseline: middle; letter-spacing: 0.1px; }
-.seg.disabled .icon { stroke: rgba(255, 255, 255, 0.28); }
-.seg.disabled text { fill: rgba(255, 255, 255, 0.32); }
-
-.cat path { fill: var(--seg-inner); transition: fill 90ms ease-out; }
-.cat.active path { fill: var(--accent-soft); }
-.cat text { fill: var(--text-dim); font-size: 9.5px; font-weight: 600; text-anchor: middle; dominant-baseline: middle; letter-spacing: 0.8px; text-transform: uppercase; }
-.cat.active text { fill: var(--text); }
-
-.empty { fill: rgba(255, 255, 255, 0.05); }
-
-#center {
-  position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px;
-  box-sizing: border-box; padding: 10px; border-radius: 50%;
-  background: rgba(0, 0, 0, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  color: var(--text); text-align: center;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+/* Entrada "bloom" do Tangerine: .2s, scale .45 → 1 com fade. */
+#root.in { animation: bloom .2s cubic-bezier(.18, .82, .24, 1) forwards; }
+@keyframes bloom {
+  from { opacity: 0; transform: scale(.45); }
+  to { opacity: 1; transform: scale(1); }
 }
-#thumb { width: 40px; height: 40px; margin-bottom: 4px; display: flex; align-items: center; justify-content: center; }
-#thumb img { max-width: 40px; max-height: 40px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
-#thumb svg { width: 30px; height: 30px; fill: none; stroke: rgba(255, 255, 255, 0.8); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-#thumb .badge { font: 700 7px "Segoe UI Variable Text", "Segoe UI", sans-serif; fill: rgba(255, 255, 255, 0.9); stroke: none; text-anchor: middle; }
-#ctitle { font-size: 11.5px; font-weight: 600; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#csub { font-size: 10px; color: var(--text-dim); margin-top: 2px; max-width: 92px; line-height: 1.25; max-height: 26px; overflow: hidden; }
-#center.ok #csub { color: #4cd964; }
-#center.err #csub { color: #ff6b6b; }
-.spin { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.2); border-top-color: #fff; animation: spin 0.8s linear infinite; }
+#wheel { position: absolute; left: 0; top: 0; overflow: visible; }
+
+/* Disco de vidro (o desfoque real vem do acrylic da janela). */
+.backdrop { fill: rgba(229, 233, 234, .9); stroke: rgba(255, 255, 255, .7); stroke-width: 1; }
+.backdrop-rim { fill: none; stroke: rgba(93, 102, 102, .16); stroke-width: .75; }
+.hub { fill: #fff; }
+.hub-ring { fill: rgba(236, 239, 240, .9); }
+
+.petal {
+  fill: url(#glass-fill);
+  stroke: rgba(93, 102, 102, .22);
+  stroke-width: .75;
+  transition: fill .12s;
+}
+.target.hi .petal { fill: var(--orange); stroke: rgba(194, 101, 52, .44); filter: none; }
+.target.off { opacity: .42; }
+.target.off.hi .petal { fill: #9aa3a6; stroke: rgba(93, 102, 102, .3); }
+
+.wheel-label {
+  fill: #000;
+  font: 700 14px var(--font);
+  letter-spacing: .35px;
+  pointer-events: none;
+}
+.target.hi .wheel-label { fill: #fff; }
+.tool .wheel-label { font-size: 8.5px; font-weight: 700; letter-spacing: .2px; }
+.icon { pointer-events: none; filter: brightness(0); }
+.target.hi .icon { filter: brightness(0) invert(1); }
+
+/* Pílula central: mostra a opção sob o cursor (ou o formato atual). */
+#pill {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 80px;
+  max-width: 200px;
+  min-height: 37px;
+  padding: 5px 8px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, .72);
+  border: 1px solid rgba(255, 255, 255, .7);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .07), inset 0 1px rgba(255, 255, 255, .7);
+  color: #000;
+  font: 500 13.5px/1.2 var(--font);
+  letter-spacing: .35px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+#pill.tool { font-size: 10px; font-weight: 700; letter-spacing: .2px; min-height: 41px; }
+#pill.msg { white-space: normal; font-size: 11px; font-weight: 500; max-width: 96px; }
+#pill.err { color: #b3261e; }
+#pill.ok { color: #1f7a35; }
+#pill:empty { display: none; }
+#pill .spin {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid #b6bfb3; border-top-color: var(--orange);
+  animation: spin .7s linear infinite;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Roda vazia ("No file tools for this format…"). */
+#empty {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  box-sizing: border-box;
+  padding: 18px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .95);
+  border: 1px solid #d9dfda;
+  box-shadow: 0 8px 28px rgba(36, 50, 61, .13);
+  color: #828782;
+  font: 500 12.5px/1.6 var(--font);
+  text-align: center;
+}

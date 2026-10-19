@@ -35,7 +35,7 @@ mod imp {
     };
 
     static HWND_VAL: AtomicIsize = AtomicIsize::new(0);
-    static CENTER_R: AtomicU32 = AtomicU32::new(58);
+    static CENTER_R: AtomicU32 = AtomicU32::new(50);
     static APP: OnceLock<AppHandle> = OnceLock::new();
 
     fn hwnd() -> Option<HWND> {
@@ -193,7 +193,7 @@ mod imp {
                 log("catcher: show sem janela");
                 return;
             };
-            CENTER_R.store((58.0 * scale) as u32, Ordering::Relaxed);
+            CENTER_R.store((50.0 * scale) as u32, Ordering::Relaxed);
             let ok = SetWindowPos(hw, Some(HWND_TOPMOST), x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
             let rgn = CreateEllipticRgn(0, 0, w + 1, h + 1);
             let r = SetWindowRgn(hw, Some(rgn), true);
