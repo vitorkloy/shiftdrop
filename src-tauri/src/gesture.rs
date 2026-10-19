@@ -239,11 +239,99 @@ mod imp {
     }
 }
 
+/// macOS / Linux: consulta o estado global de mouse e teclado a cada 15 ms
+/// (device_query: CoreGraphics no macOS, X11/XWayland no Linux). Sem fonte de
+/// processo (abre de qualquer app). Em Wayland puro sem XWayland não há leitura
+/// global: fica só o atalho da bandeja ("Abrir menu aqui").
 #[cfg(not(windows))]
 mod imp {
-    use tauri::AppHandle;
-    pub fn cursor_pos() -> (i32, i32) {
-        (400, 400)
+    use super::show_radial;
+    use device_query::{DeviceQuery, DeviceState, Keycode};
+    use std::time::Duration;
+    use tauri::{AppHandle, Emitter, Manager};
+
+    const THRESHOLD: i32 = 12;
+    const MODES: [&str; 3] = ["convert", "tools", "actions"];
+
+    fn keyset(k: &[Keycode]) -> [bool; 3] {
+        let has = |a: &[Keycode]| a.iter().any(|x| k.contains(x));
+        // Shift = converter; Ctrl/Command = ferramentas; Alt/Option = ações.
+        let mut tools = vec![Keycode::LControl, Keycode::RControl];
+        if cfg!(target_os = "macos") {
+            tools.extend([Keycode::Command, Keycode::LMeta, Keycode::RMeta]);
+        }
+        [
+            has(&[Keycode::LShift, Keycode::RShift]),
+            has(&tools),
+            has(&[Keycode::LAlt, Keycode::RAlt, Keycode::LOption, Keycode::ROption]),
+        ]
     }
-    pub fn spawn(_app: AppHandle) {}
+
+    fn state() -> Option<DeviceState> {
+        if cfg!(target_os = "linux") && std::env::var_os("DISPLAY").is_none() {
+            return None;
+        }
+        DeviceState::checked_new()
+    }
+
+    fn to_physical(app: &AppHandle, (x, y): (i32, i32)) -> (i32, i32) {
+        // CoreGraphics devolve pontos (lógicos); a janela trabalha em pixels físicos.
+        if cfg!(target_os = "macos") {
+            let s = app
+                .get_webview_window("radial")
+                .and_then(|w| w.scale_factor().ok())
+                .unwrap_or(1.0);
+            ((x as f64 * s) as i32, (y as f64 * s) as i32)
+        } else {
+            (x, y)
+        }
+    }
+
+    pub fn cursor_pos() -> (i32, i32) {
+        state().map(|d| d.get_mouse().coords).unwrap_or((400, 400))
+    }
+
+    pub fn spawn(app: AppHandle) {
+        std::thread::spawn(move || {
+            let Some(dev) = state() else {
+                crate::logx::log("gesto: sem leitura global de teclado/mouse (Wayland?) — use o menu da bandeja");
+                return;
+            };
+            crate::logx::log("gesto: thread de detecção iniciada (device_query, 15 ms)");
+            let (mut down, mut shown, mut origin, mut prev) = (false, false, (0, 0), [false; 3]);
+            loop {
+                std::thread::sleep(Duration::from_millis(15));
+                let m = dev.get_mouse();
+                let left = m.button_pressed.get(1).copied().unwrap_or(false);
+                let now = keyset(&dev.get_keys());
+                let tapped = (0..3).find(|&i| now[i] && !prev[i]);
+                let held = (0..3).find(|&i| now[i]);
+                prev = now;
+                if left && !down {
+                    down = true;
+                    origin = m.coords;
+                } else if left && down {
+                    if !shown {
+                        if let Some(k) = held {
+                            let (dx, dy) = (m.coords.0 - origin.0, m.coords.1 - origin.1);
+                            if dx * dx + dy * dy > THRESHOLD * THRESHOLD {
+                                shown = true;
+                                let (x, y) = to_physical(&app, m.coords);
+                                show_radial(&app, x, y, false);
+                                let _ = app.emit("wheel-mode", serde_json::json!({ "mode": MODES[k] }));
+                            }
+                        }
+                    } else if let Some(k) = tapped {
+                        let _ = app.emit("wheel-mode", serde_json::json!({ "mode": MODES[k] }));
+                    }
+                } else if !left && down {
+                    down = false;
+                    if shown {
+                        shown = false;
+                        let _ = app.emit("gesture-end", ());
+                    }
+                }
+            }
+        });
+    }
 }

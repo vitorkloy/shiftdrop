@@ -51,6 +51,13 @@ async fn run_action(action_id: String, paths: Vec<String>) -> Result<Vec<String>
 }
 
 /// Cor de acento do Windows (#rrggbb), lida de HKCU\Software\Microsoft\Windows\DWM\AccentColor (ABGR).
+#[cfg(not(windows))]
+#[tauri::command]
+fn accent_color() -> Option<String> {
+    None
+}
+
+#[cfg(windows)]
 #[tauri::command]
 fn accent_color() -> Option<String> {
     let out = tools::command(std::path::Path::new("reg.exe"))

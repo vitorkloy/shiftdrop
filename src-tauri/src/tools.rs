@@ -53,7 +53,18 @@ fn find(name: &str, fallbacks: &[PathBuf]) -> Option<PathBuf> {
     if let Ok(p) = which::which(name) {
         return Some(p);
     }
-    fallbacks.iter().find(|p| p.is_file()).cloned()
+    if let Some(p) = fallbacks.iter().find(|p| p.is_file()) {
+        return Some(p.clone());
+    }
+    // Apps GUI no macOS/Linux não herdam o PATH do shell (Homebrew, etc.).
+    #[cfg(not(windows))]
+    for d in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/Applications/LibreOffice.app/Contents/MacOS"] {
+        let p = Path::new(d).join(name);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    None
 }
 
 fn subdirs(dir: &Path) -> Vec<PathBuf> {

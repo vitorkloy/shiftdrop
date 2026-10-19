@@ -77,3 +77,24 @@ Uma thread consulta o botão esquerdo e Shift/Ctrl/Alt (`GetAsyncKeyState`) a ca
 O drop é recebido por uma janela nativa própria (`ShiftDropCatcher`, circular, por cima da roda) com um `IDropTarget` que lê o caminho (`CF_HDROP`) já no **DragEnter**, então os setores certos aparecem antes de soltar. Ao abrir, a roda sempre desenha setores genéricos e troca pelos do tipo assim que o arquivo é identificado.
 
 Log em `%LOCALAPPDATA%\ShiftDrop\log.txt` (gesto, tecla, roda, DragEnter/Drop com caminhos, console do JS e resultado).
+
+## Plataformas (v0.2.0)
+
+Os builds saem do GitHub Actions (`.github/workflows/release.yml`, `tauri-apps/tauri-action`) em tag `v*` ou manualmente (workflow_dispatch), como **release rascunho**:
+
+| Plataforma | Pacote | Gesto | Limitações |
+|---|---|---|---|
+| Windows 10/11 | NSIS `.exe` (WebView2 bootstrapper embutido) | Hook de estado (GetAsyncKeyState) + drop target OLE nativo (CF_HDROP) + recorte `SetWindowRgn` | Vidro é CSS (sem Mica/acrylic do DWM), então o visual é igual no Win10 e no Win11. |
+| macOS 11+ | `.dmg` universal (Apple Silicon + Intel) | Leitura global de mouse/modificadores via CoreGraphics (`device_query`); drop pelo drag-drop do Tauri numa janela transparente | Peça permissão em *Ajustes > Privacidade > Monitoramento de Entrada/Acessibilidade*. App não assinado/notarizado: abra com botão direito > Abrir. Ctrl ou ⌘ = File tools, Option = File actions. Sem cor de destaque do sistema (usa laranja). |
+| Linux | `.deb` e `.AppImage` (webkit2gtk-4.1) | X11/XWayland via `device_query` (`DISPLAY`); drop pelo drag-drop GTK do Tauri | **Wayland puro**: sem leitura global de teclado/mouse, use o item da bandeja "Abrir menu aqui" e arraste o arquivo para a roda. Recorte circular depende do compositor (transparência). |
+
+Comum: o gesto abre a roda a partir de qualquer app (só no Windows existe o filtro por gerenciador de arquivos). COPY/COPY PATH usam `pbcopy` (mac) ou `wl-copy`/`xclip` (Linux); MOVE usa `osascript` / `zenity`/`kdialog`; TERMINAL abre Terminal.app / `x-terminal-emulator`.
+
+### Dependências no macOS/Linux
+
+As conversões usam as ferramentas do sistema, procuradas no PATH e também em `/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin` (apps GUI não herdam o PATH do shell), ou forçadas por `SHIFTDROP_FFMPEG`, `SHIFTDROP_MAGICK`, etc.
+
+- macOS: `brew install ffmpeg imagemagick pandoc ghostscript` e `brew install --cask libreoffice`.
+- Debian/Ubuntu: `sudo apt install ffmpeg imagemagick pandoc ghostscript libreoffice` (o `.deb` já puxa ffmpeg e imagemagick).
+
+O que faltar aparece desabilitado na roda com o motivo ("Requer …").

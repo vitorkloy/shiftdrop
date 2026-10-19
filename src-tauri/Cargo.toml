@@ -1,8 +1,8 @@
 [package]
 name = "shiftdrop"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Shift + arrastar um arquivo para converter localmente (Windows)"
+description = "Shift + arrastar um arquivo para converter localmente (Windows, macOS, Linux)"
 authors = ["Vitor de Oliveira"]
 license = "MIT"
 
@@ -14,13 +14,16 @@ crate-type = ["rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 which = "7"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp", "tiff", "ico"] }
+
+[target.'cfg(not(windows))'.dependencies]
+device_query = "3"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
