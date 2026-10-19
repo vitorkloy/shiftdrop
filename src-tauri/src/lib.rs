@@ -50,6 +50,20 @@ async fn run_action(action_id: String, paths: Vec<String>) -> Result<Vec<String>
     .map_err(|e| e.to_string())?
 }
 
+/// Cor de acento do Windows (#rrggbb), lida de HKCU\Software\Microsoft\Windows\DWM\AccentColor (ABGR).
+#[tauri::command]
+fn accent_color() -> Option<String> {
+    let out = tools::command(std::path::Path::new("reg.exe"))
+        .args(["query", r"HKCU\Software\Microsoft\Windows\DWM", "/v", "AccentColor"])
+        .output()
+        .ok()?;
+    let txt = String::from_utf8_lossy(&out.stdout);
+    let hex = txt.split_whitespace().find(|w| w.starts_with("0x"))?;
+    let v = u32::from_str_radix(hex.trim_start_matches("0x"), 16).ok()?;
+    let (r, g, b) = (v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff);
+    Some(format!("#{r:02x}{g:02x}{b:02x}"))
+}
+
 /// Console do JS → log em arquivo.
 #[tauri::command]
 fn js_log(level: String, msg: String) {
@@ -97,7 +111,7 @@ pub fn run() {
                 drag::forward(webview.app_handle(), webview.label(), e);
             }
         })
-        .invoke_handler(tauri::generate_handler![js_log, wheels, list_actions, generic_actions, run_action, hide_radial, thumbnail])
+        .invoke_handler(tauri::generate_handler![js_log, accent_color, wheels, list_actions, generic_actions, run_action, hide_radial, thumbnail])
         .setup(|app| {
             logx::log(format!(
                 "==== ShiftDrop {} iniciado: exe={:?} pid={} args={:?}",

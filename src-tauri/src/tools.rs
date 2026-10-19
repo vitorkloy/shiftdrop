@@ -27,8 +27,8 @@ impl Tools {
             .or_else(|| find("ffprobe", &[]));
         let magick = find("magick", &program_files_glob("ImageMagick", "magick.exe"));
         let soffice = find("soffice", &soffice_fallbacks());
-        let pandoc = find("pandoc", &program_files_glob("Pandoc", "pandoc.exe"));
-        let gs = find("gswin64c", &[]).or_else(|| find("gs", &[]));
+        let pandoc = find("pandoc", &pandoc_fallbacks());
+        let gs = find("gswin64c", &gs_fallbacks()).or_else(|| find("gs", &[]));
         let tar = find("tar", &[PathBuf::from(r"C:\Windows\System32\tar.exe")]);
         Tools { ffmpeg, ffprobe, magick, soffice, pandoc, gs, tar }
     }
@@ -98,6 +98,30 @@ fn ffmpeg_fallbacks() -> Vec<PathBuf> {
         }
     }
     v.push(PathBuf::from(r"C:\ffmpeg\bin\ffmpeg.exe"));
+    v
+}
+
+fn pandoc_fallbacks() -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = program_files().into_iter().map(|pf| pf.join(r"Pandoc\pandoc.exe")).collect();
+    if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        v.push(local.join(r"Pandoc\pandoc.exe"));
+        v.push(local.join(r"Programs\Pandoc\pandoc.exe"));
+        v.push(local.join(r"Microsoft\WinGet\Links\pandoc.exe"));
+    }
+    v
+}
+
+/// Ghostscript instala em `Program Files\gs\gs<versão>\bin\gswin64c.exe` (fora do PATH).
+fn gs_fallbacks() -> Vec<PathBuf> {
+    let mut v = Vec::new();
+    for pf in program_files() {
+        let mut vers = subdirs(&pf.join("gs"));
+        vers.sort();
+        for d in vers.into_iter().rev() {
+            v.push(d.join(r"bin\gswin64c.exe"));
+            v.push(d.join(r"bin\gswin32c.exe"));
+        }
+    }
     v
 }
 

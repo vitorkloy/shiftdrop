@@ -1,4 +1,5 @@
-// Roda do ShiftDrop no estilo Tangerine (geometria e cores do tangerineformac.com).
+// Roda do ShiftDrop: forma/layout do Tangerine, acabamento Windows 11
+// (tema claro/escuro do sistema, cor de acento, Segoe UI Variable, Segoe Fluent Icons).
 // Três rodas: Shift = Convert formats, Ctrl = File tools, Alt = File actions.
 // Sem botões magnéticos nem cursor customizado: só o setor sob o cursor fica laranja.
 const T = window.__TAURI__;
@@ -19,6 +20,24 @@ window.addEventListener("error", (e) => jsLog("error", [`${e.message} @${e.filen
 window.addEventListener("unhandledrejection", (e) => jsLog("error", ["promise: " + ((e.reason && e.reason.message) || e.reason)]));
 
 const NS = "http://www.w3.org/2000/svg";
+
+// Glifos do Segoe Fluent Icons (fallback Segoe MDL2 Assets).
+const GLYPH = {
+  compress: "\uE73F", removeMetadata: "\uE8EC", editImage: "\uE70F", annotateImage: "\uE76D",
+  frameImage: "\uE8B9", cropImage: "\uE7A8", cropVideo: "\uE7A8", redactImage: "\uED1A", redactVideo: "\uED1A",
+  normalizeAudio: "\uE9E9", muteVideo: "\uE74F", trimVideo: "\uE8C6", trimAudio: "\uE8C6",
+  splitPDF: "\uE8AB", splitVideo: "\uE8AB", organizePDF: "\uE8A9", extractArchive: "\uED25",
+  createPDF: "\uEA90", mergePDF: "\uE710", changeVideoSpeed: "\uEC4A", joinVideos: "\uE71B",
+  videoSnapshots: "\uE722", audioToVideo: "\uE8D6", audioChannels: "\uE7F5", createCollage: "\uE8A9",
+  redactAudio: "\uEC54", airDrop: "\uE72D", float: "\uE718", copy: "\uE8C8", move: "\uE8DE",
+  copyPath: "\uE71B", openTerminal: "\uE756",
+};
+
+// Cor de acento do Windows (fallback: laranja do Tangerine).
+invoke("accent_color").then((c) => {
+  if (c) document.documentElement.style.setProperty("--accent", c);
+  console.log(`acento do sistema: ${c || "(padrão laranja)"}`);
+}).catch(() => {});
 const VIEW = 252;           // unidades do viewBox (−126…126)
 const PX = 290;             // tamanho da janela em px lógicos
 const S = PX / VIEW;        // px por unidade
@@ -119,15 +138,16 @@ function render() {
   el("circle", { class: "backdrop", r: M.backdrop - 0.5 }, svg);
   el("circle", { class: "backdrop-rim", r: M.backdrop - 0.5 }, svg);
   el("circle", { class: "hub-ring", r: M.inner - 1 }, svg);
-  el("circle", { class: "hub", r: M.inner - 6, filter: "url(#hubshadow)" }, svg);
+  el("circle", { class: "hub", r: M.inner - 6 }, svg);
   const tool = mode !== "convert";
   const n = items.length;
   items.forEach((it, i) => {
     const g = el("g", { class: `target${tool ? " tool" : ""}${i === hover ? " hi" : ""}${it.available ? "" : " off"}` }, svg);
-    el("path", { class: "petal", d: petalPath(i, n), filter: i === hover ? "" : "url(#relief)" }, g);
+    el("path", { class: "petal", d: petalPath(i, n) }, g);
     const [x, y] = be(M.labelInner + (M.outer - M.labelInner) * 0.56, F(i, n));
     if (tool && it.icon) {
-      el("image", { class: "icon", href: `icons/${it.icon}.svg`, x: x - 9, y: y - 16.5, width: 18, height: 18 }, g);
+      const ic = el("text", { class: "icon", x, y: y - 6.5, "text-anchor": "middle", "dominant-baseline": "middle" }, g);
+      ic.textContent = GLYPH[it.icon] || "\uE8A5";
     }
     const t = el("text", { class: "wheel-label", x, y: tool ? y + 10.5 : y, "text-anchor": "middle", "dominant-baseline": "middle" }, g);
     t.textContent = it.title;

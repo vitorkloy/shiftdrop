@@ -202,7 +202,7 @@ fn conv_gate(kind: &str, from: &str, to: &str, t: &Tools) -> (bool, Option<Strin
         }
         "audio" | "video" | "gif" => need(&t.ffmpeg, "Requer ffmpeg"),
         "pdf" => match to {
-            "jpg" | "png" => if t.magick.is_some() && t.gs.is_some() { ok() } else { no("Requer ImageMagick + Ghostscript") },
+            "jpg" | "png" => need(&t.gs, "Requer Ghostscript"),
             "docx" | "txt" => need(&t.soffice, "Requer LibreOffice"),
             _ => no(SOON),
         },
@@ -392,7 +392,28 @@ fn doc_convert(p: &Path, to: &str, t: &Tools) -> R<PathBuf> {
     if to == "md" || from == "md" || from == "epub" {
         let pd = t.pandoc.as_ref().ok_or("Requer pandoc")?;
         let out = cv::unique_out(p, "", to);
-        run_tool(pd, &[os(p), os("-o"), os(&out)])?;
+        // pandoc não lê .doc/.rtf antigos: passa antes pelo LibreOffice (→ .docx temporário).
+        let mut tmp: Option<PathBuf> = None;
+        let src = if matches!(from.as_str(), "doc" | "rtf" | "pages" | "txt") && from != "txt" {
+            let d = cv::temp_file("lo-docx");
+            std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+            let copy = d.join(format!("{}.{}", stem(p), from));
+            std::fs::copy(p, &copy).map_err(|e| e.to_string())?;
+            let docx = cv::soffice_convert(&copy, None, "docx", "docx", t)?;
+            tmp = Some(d);
+            docx
+        } else {
+            p.to_path_buf()
+        };
+        let mut args = vec![os(&src), os("-o"), os(&out)];
+        if from == "txt" {
+            args.splice(0..0, [os("-f"), os("markdown")]);
+        }
+        let r = run_tool(pd, &args);
+        if let Some(d) = tmp {
+            let _ = std::fs::remove_dir_all(d);
+        }
+        r?;
         return if out.is_file() { Ok(out) } else { Err("pandoc não gerou o arquivo".into()) };
     }
     let filter = match to {
@@ -400,7 +421,39 @@ fn doc_convert(p: &Path, to: &str, t: &Tools) -> R<PathBuf> {
         "txt" => "txt:Text",
         other => other,
     };
-    cv::soffice_convert(p, filter, to, t)
+    if from == "pdf" {
+        if to == "jpg" || to == "png" {
+            return pdf_to_images(p, to, t);
+        }
+        // PDF → Writer (texto editável).
+        let f = if to == "txt" { "txt:Text" } else { "docx:MS Word 2007 XML" };
+        return cv::soffice_convert(p, Some("writer_pdf_import"), f, to, t);
+    }
+    cv::soffice_convert(p, None, filter, to, t)
+}
+
+/// PDF → uma imagem por página (Ghostscript, 200 dpi): `nome-1.png`, `nome-2.png`…
+fn pdf_to_images(p: &Path, to: &str, t: &Tools) -> R<PathBuf> {
+    let gs = t.gs.as_ref().ok_or("Requer Ghostscript")?;
+    let dir = p.parent().unwrap_or(Path::new("."));
+    let mut base = stem(p);
+    let mut n = 1;
+    while dir.join(format!("{base}-1.{to}")).exists() {
+        base = format!("{} ({n})", stem(p));
+        n += 1;
+    }
+    let pattern = dir.join(format!("{base}-%d.{to}"));
+    let dev = if to == "jpg" { "jpeg" } else { "png16m" };
+    run_tool(gs, &[os("-dSAFER"), os("-dBATCH"), os("-dNOPAUSE"), os("-dQUIET"), os(format!("-sDEVICE={dev}")), os("-r200"), os("-dJPEGQ=90"), os("-o"), os(&pattern), os(p)])?;
+    let first = dir.join(format!("{base}-1.{to}"));
+    if first.is_file() { Ok(first) } else { Err("Ghostscript não gerou imagens".into()) }
+}
+
+fn compress_pdf(p: &Path, t: &Tools) -> R<PathBuf> {
+    let gs = t.gs.as_ref().ok_or("Requer Ghostscript")?;
+    let out = cv::unique_out(p, "-comprimido", "pdf");
+    run_tool(gs, &[os("-dSAFER"), os("-dBATCH"), os("-dNOPAUSE"), os("-dQUIET"), os("-sDEVICE=pdfwrite"), os("-dCompatibilityLevel=1.5"), os("-dPDFSETTINGS=/ebook"), os("-o"), os(&out), os(p)])?;
+    if out.is_file() { Ok(out) } else { Err("Ghostscript não gerou o PDF".into()) }
 }
 
 fn subtitle_convert(p: &Path, to: &str) -> R<PathBuf> {
@@ -497,6 +550,7 @@ fn run_tool_action(tool: &str, kind: &str, paths: &[PathBuf], t: &Tools) -> R<Ve
         ("compress", "image") => crate::convert::run_action("compress_image", paths, t),
         ("compress", "video") => crate::convert::run_action("compress_video", paths, t),
         ("compress", "audio") => crate::convert::run_action("compress_audio", paths, t),
+        ("compress", "pdf") => cv::each(paths, |p| compress_pdf(p, t)),
         ("removeMetadata", "image") => cv::each(paths, |p| cv::strip_image_metadata(p, t)),
         ("removeMetadata", _) => cv::each(paths, |p| {
             let e = fmt_of(p);

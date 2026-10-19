@@ -1,112 +1,87 @@
-/* ShiftDrop — roda no estilo Tangerine (valores do tangerineformac.com).
+/* ShiftDrop — forma da roda do Tangerine, acabamento Windows 11.
+   Segue o tema claro/escuro do sistema e a cor de acento (fallback laranja).
    Sem botões magnéticos e sem cursor customizado. */
 :root {
-  --orange: #ff5200;
-  --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
+  --accent: #ff5200;
+  --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --icons: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+  /* Claro (Mica/Acrylic claro do Win11) */
+  --disc: rgba(243, 243, 243, .96);
+  --disc-stroke: rgba(0, 0, 0, .10);
+  --hub-ring: rgba(0, 0, 0, .035);
+  --hub: #ffffff;
+  --petal: #fbfbfb;
+  --petal-stroke: rgba(0, 0, 0, .075);
+  --text: #1b1b1b;
+  --text-off: rgba(0, 0, 0, .36);
+  --pill: #ffffff;
+  --pill-stroke: rgba(0, 0, 0, .07);
+  --card: #f9f9f9;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --disc: rgba(32, 32, 32, .97);
+    --disc-stroke: rgba(255, 255, 255, .09);
+    --hub-ring: rgba(255, 255, 255, .03);
+    --hub: #2b2b2b;
+    --petal: #2d2d2d;
+    --petal-stroke: rgba(255, 255, 255, .07);
+    --text: #ffffff;
+    --text-off: rgba(255, 255, 255, .36);
+    --pill: #383838;
+    --pill-stroke: rgba(255, 255, 255, .08);
+    --card: #2b2b2b;
+  }
 }
 html, body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  background: transparent;
-  overflow: hidden;
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: default;
+  margin: 0; width: 100%; height: 100%;
+  background: transparent; overflow: hidden;
+  user-select: none; -webkit-user-select: none; cursor: default;
   font-family: var(--font);
 }
-#root {
-  position: fixed;
-  inset: 0;
-  opacity: 0;
-  transform-origin: 50% 50%;
-}
-/* Entrada "bloom" do Tangerine: .2s, scale .45 → 1 com fade. */
-#root.in { animation: bloom .2s cubic-bezier(.18, .82, .24, 1) forwards; }
-@keyframes bloom {
-  from { opacity: 0; transform: scale(.45); }
-  to { opacity: 1; transform: scale(1); }
-}
+#root { position: fixed; inset: 0; opacity: 0; transform-origin: 50% 50%; }
+/* Entrada: escala + fade, curva de "decelerate" do Fluent. */
+#root.in { animation: bloom .2s cubic-bezier(.1, .9, .2, 1) forwards; }
+@keyframes bloom { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
 #wheel { position: absolute; left: 0; top: 0; overflow: visible; }
 
-/* Disco de vidro (o desfoque real vem do acrylic da janela). */
-.backdrop { fill: rgba(229, 233, 234, .9); stroke: rgba(255, 255, 255, .7); stroke-width: 1; }
-.backdrop-rim { fill: none; stroke: rgba(93, 102, 102, .16); stroke-width: .75; }
-.hub { fill: #fff; }
-.hub-ring { fill: rgba(236, 239, 240, .9); }
+.backdrop { fill: var(--disc); stroke: none; }
+.backdrop-rim { fill: none; stroke: var(--disc-stroke); stroke-width: .8; }
+.hub-ring { fill: var(--hub-ring); }
+.hub { fill: var(--hub); stroke: var(--petal-stroke); stroke-width: .75; }
 
-.petal {
-  fill: url(#glass-fill);
-  stroke: rgba(93, 102, 102, .22);
-  stroke-width: .75;
-  transition: fill .12s;
-}
-.target.hi .petal { fill: var(--orange); stroke: rgba(194, 101, 52, .44); filter: none; }
-.target.off { opacity: .42; }
-.target.off.hi .petal { fill: #9aa3a6; stroke: rgba(93, 102, 102, .3); }
+.petal { fill: var(--petal); stroke: var(--petal-stroke); stroke-width: .75; transition: fill .083s linear; }
+.target.hi .petal { fill: var(--accent); stroke: transparent; }
+.target.off .wheel-label, .target.off .icon { fill: var(--text-off); }
+.target.off.hi .petal { fill: var(--text-off); }
 
-.wheel-label {
-  fill: #000;
-  font: 700 14px var(--font);
-  letter-spacing: .35px;
-  pointer-events: none;
-}
-.target.hi .wheel-label { fill: #fff; }
-.tool .wheel-label { font-size: 8.5px; font-weight: 700; letter-spacing: .2px; }
-.icon { pointer-events: none; filter: brightness(0); }
-.target.hi .icon { filter: brightness(0) invert(1); }
+.wheel-label { fill: var(--text); font: 600 13.5px var(--font); letter-spacing: .3px; pointer-events: none; }
+.target.hi .wheel-label, .target.hi .icon { fill: #fff; }
+.tool .wheel-label { font-size: 8.5px; letter-spacing: .2px; }
+.icon { fill: var(--text); font: 15px var(--icons); pointer-events: none; }
 
-/* Pílula central: mostra a opção sob o cursor (ou o formato atual). */
 #pill {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: grid;
-  place-items: center;
-  box-sizing: border-box;
-  min-width: 80px;
-  max-width: 200px;
-  min-height: 37px;
-  padding: 5px 8px;
-  border-radius: 28px;
-  background: rgba(255, 255, 255, .72);
-  border: 1px solid rgba(255, 255, 255, .7);
-  box-shadow: 0 2px 7px rgba(0, 0, 0, .07), inset 0 1px rgba(255, 255, 255, .7);
-  color: #000;
-  font: 500 13.5px/1.2 var(--font);
-  letter-spacing: .35px;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: grid; place-items: center; box-sizing: border-box;
+  min-width: 80px; max-width: 200px; min-height: 34px; padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--pill); border: 1px solid var(--pill-stroke);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .08);
+  color: var(--text); font: 600 13px/1.2 var(--font); letter-spacing: .3px;
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
 }
-#pill.tool { font-size: 10px; font-weight: 700; letter-spacing: .2px; min-height: 41px; }
+#pill.tool { font-size: 10px; min-height: 36px; }
 #pill.msg { white-space: normal; font-size: 11px; font-weight: 500; max-width: 96px; }
-#pill.err { color: #b3261e; }
-#pill.ok { color: #1f7a35; }
+#pill.err { color: #c42b1c; }
+#pill.ok { color: #0f7b0f; }
+@media (prefers-color-scheme: dark) { #pill.err { color: #ff99a4; } #pill.ok { color: #6ccb5f; } }
 #pill:empty { display: none; }
-#pill .spin {
-  width: 16px; height: 16px; border-radius: 50%;
-  border: 2px solid #b6bfb3; border-top-color: var(--orange);
-  animation: spin .7s linear infinite;
-}
+#pill .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--pill-stroke); border-top-color: var(--accent); animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Roda vazia ("No file tools for this format…"). */
 #empty {
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  width: 200px;
-  box-sizing: border-box;
-  padding: 18px 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, .95);
-  border: 1px solid #d9dfda;
-  box-shadow: 0 8px 28px rgba(36, 50, 61, .13);
-  color: #828782;
-  font: 500 12.5px/1.6 var(--font);
-  text-align: center;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 200px; box-sizing: border-box; padding: 16px;
+  border-radius: 8px; background: var(--card); border: 1px solid var(--pill-stroke);
+  color: var(--text); opacity: .85; font: 400 12.5px/1.55 var(--font); text-align: center;
 }

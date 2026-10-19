@@ -406,18 +406,18 @@ fn merge_audio(paths: &[PathBuf], tools: &Tools) -> R<PathBuf> {
 // ---------- documentos (LibreOffice) ----------
 
 fn doc_to_pdf(p: &Path, tools: &Tools) -> R<PathBuf> {
-    soffice_convert(p, "pdf", "pdf", tools)
+    soffice_convert(p, None, "pdf", "pdf", tools)
 }
 
 /// Converte com o LibreOffice (`--convert-to <filtro>`), saída `<nome>.<ext>` na mesma pasta.
-pub(crate) fn soffice_convert(p: &Path, filter: &str, out_ext: &str, tools: &Tools) -> R<PathBuf> {
+pub(crate) fn soffice_convert(p: &Path, infilter: Option<&str>, filter: &str, out_ext: &str, tools: &Tools) -> R<PathBuf> {
     let soffice = tools.soffice.as_ref().ok_or("LibreOffice não encontrado")?;
     let tmpdir = temp_file("lo");
     std::fs::create_dir_all(&tmpdir).map_err(es)?;
     // Perfil separado para não conflitar com um LibreOffice já aberto.
     let profile = std::env::temp_dir().join("shiftdrop-lo-profile");
     let url = format!("file:///{}", profile.display().to_string().replace('\\', "/").replace(' ', "%20"));
-    let args = vec![
+    let mut args = vec![
         os(format!("-env:UserInstallation={url}")),
         os("--headless"),
         os("--norestore"),
@@ -425,8 +425,11 @@ pub(crate) fn soffice_convert(p: &Path, filter: &str, out_ext: &str, tools: &Too
         os(filter),
         os("--outdir"),
         os(&tmpdir),
-        os(p),
     ];
+    if let Some(f) = infilter {
+        args.push(os(format!("--infilter={f}")));
+    }
+    args.push(os(p));
     let r = run_tool(soffice, &args);
     let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let produced = tmpdir.join(format!("{stem}.{out_ext}"));

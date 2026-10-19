@@ -16,7 +16,7 @@ Feito com Tauri v2 (Rust + HTML/JS simples). Fica na bandeja do sistema.
 
 A roda fica aberta até você soltar. Dá para trocar de roda no meio do arraste tocando outra tecla. Soltar no centro cancela. Para trocar as teclas, use `SHIFTDROP_KEYS=convert,tools,actions` (ex. `ctrl,shift,alt`).
 
-O visual segue o site oficial: disco de vidro cinza-claro (acrylic do Windows recortado em círculo), setores com relevo suave e cantos arredondados, setor ativo laranja `#ff5200` com texto branco, rótulos em CAPS, pílula branca no centro com a opção sob o cursor e entrada "bloom" de 200 ms. O número de setores varia por tipo: 2 viram semicírculos e 1 vira um anel inteiro. Sem botões magnéticos e sem cursor customizado.
+Forma e layout seguem o Tangerine; o acabamento é Windows 11: tema claro/escuro do sistema, cor de acento do Windows no setor ativo (fallback laranja `#ff5200`), Segoe UI Variable, ícones Segoe Fluent Icons. Sem acrylic do DWM (ele ignora o recorte circular e pintava um quadrado atrás da roda); rótulos em CAPS, pílula branca no centro com a opção sob o cursor e entrada "bloom" de 200 ms. O número de setores varia por tipo: 2 viram semicírculos e 1 vira um anel inteiro. Sem botões magnéticos e sem cursor customizado.
 
 Referências usadas: `docs/ref/` (prints do site, do app e frames do reel). Comparações lado a lado: `docs/compare-*.png`.
 
