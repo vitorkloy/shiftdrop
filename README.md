@@ -68,3 +68,20 @@ Autoteste do arrastar (OLE de verdade, sem mouse): abre o overlay, cria o IDataO
 shiftdrop.exe selftest-drag C:\caminho\cat6.JPEG --drop   # solta no setor do topo (WEBP para imagens)
 ```
 
+## Como funciona o gesto
+
+Uma thread consulta o estado global do botão esquerdo e do Shift (`GetAsyncKeyState`) a cada 15 ms. Se o clique começou numa janela do Explorer e o cursor andou com Shift pressionado, o menu é exibido centrado no cursor. Sem hook de baixo nível e sem injetar DLL.
+
+O drop é recebido por uma janela nativa própria (`ShiftDropCatcher`, recortada em círculo, por cima do menu) com um `IDropTarget` que lê o caminho (`CF_HDROP`) já no **DragEnter**. Assim os setores certos aparecem antes de soltar. Ao abrir, o menu sempre desenha setores genéricos (PNG, JPG, PDF, MP4, MP3, Comprimir) e troca pelos específicos assim que o arquivo é identificado. Extensões não diferenciam maiúsculas (`.JPEG` = `.jpg`). Soltar no anel interno (categorias) vale a ação no mesmo ângulo.
+
+O disco usa acrylic do Windows recortado em círculo. Não há janela de sombra (era ela que fazia um quadrado escuro atrás do disco).
+
+## Log e diagnóstico
+
+Tudo vai para `%LOCALAPPDATA%\ShiftDrop\log.txt` (gira em 2 MB para `log.old.txt`): início, gesto, exibição do menu, DragEnter/Drop com os caminhos, console do JS e resultado da conversão.
+
+```powershell
+shiftdrop.exe preview foto.jpg --hover 2     # mostra o menu para um arquivo
+shiftdrop.exe selftest-drag foto.jpg --drop  # simula um drag OLE no próprio processo
+shiftdrop.exe debug-show 683 384             # pede à instância aberta que mostre o menu ali
+```
