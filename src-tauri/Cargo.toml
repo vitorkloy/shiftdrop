@@ -19,6 +19,7 @@ tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 which = "7"
+base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp", "tiff", "ico"] }
 
 [target.'cfg(windows)'.dependencies]
@@ -28,6 +29,8 @@ windows-sys = { version = "0.59", features = [
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_System_Threading",
   "Win32_System_Console",
+  "Win32_System_LibraryLoader",
+  "Win32_Graphics_Gdi",
 ] }
 
 [profile.release]
@@ -35,3 +38,8 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+[profile.dev]
+debug = 0
+incremental = false
+

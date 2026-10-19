@@ -67,6 +67,8 @@ pub struct ActionInfo {
     pub id: &'static str,
     pub label: &'static str,
     pub icon: &'static str,
+    /// Categoria (anel interno quando há muitas ações).
+    pub group: &'static str,
     pub available: bool,
     pub reason: Option<String>,
 }
@@ -78,8 +80,10 @@ pub fn list_actions(paths: &[PathBuf], tools: &Tools) -> Vec<ActionInfo> {
     let all_ext = |e: &str| exts.iter().all(|x| x == e);
     let gate = |ok: bool, msg: &str| if ok { (true, None) } else { (false, Some(msg.to_string())) };
     let mut v = Vec::new();
-    let mut push = |id, label, icon, (available, reason): (bool, Option<String>)| {
-        v.push(ActionInfo { id, label, icon, available, reason })
+    const CONV: &str = "Converter";
+    const EDIT: &str = "Editar";
+    let mut push = |id, label, icon, group, (available, reason): (bool, Option<String>)| {
+        v.push(ActionInfo { id, label, icon, group, available, reason })
     };
 
     match kind {
@@ -92,13 +96,13 @@ pub fn list_actions(paths: &[PathBuf], tools: &Tools) -> Vec<ActionInfo> {
                 ("to_webp", "WEBP", "🌐", "webp"),
             ] {
                 if !all_ext(e) {
-                    push(id, label, icon, g.clone());
+                    push(id, label, icon, CONV, g.clone());
                 }
             }
-            push("to_pdf", if multi { "Juntar PDF" } else { "PDF" }, "📄", g.clone());
-            push("compress_image", "Comprimir", "🗜️", g.clone());
-            push("crop_square", "Quadrado", "⬛", g.clone());
-            push("resize_half", "50%", "↘️", g);
+            push("to_pdf", if multi { "Juntar PDF" } else { "PDF" }, "📄", CONV, g.clone());
+            push("compress_image", "Comprimir", "🗜️", EDIT, g.clone());
+            push("crop_square", "Quadrado", "⬛", EDIT, g.clone());
+            push("resize_half", "50%", "↘️", EDIT, g);
         }
         Kind::Video => {
             let g = gate(tools.ffmpeg.is_some(), "Requer ffmpeg");
@@ -108,13 +112,13 @@ pub fn list_actions(paths: &[PathBuf], tools: &Tools) -> Vec<ActionInfo> {
                 ("to_gif", "GIF", "🎞️", "gif"),
             ] {
                 if !all_ext(e) {
-                    push(id, label, icon, g.clone());
+                    push(id, label, icon, CONV, g.clone());
                 }
             }
-            push("extract_mp3", "MP3", "🎵", g.clone());
-            push("compress_video", "Comprimir", "🗜️", g.clone());
+            push("extract_mp3", "MP3", "🎵", CONV, g.clone());
+            push("compress_video", "Comprimir", "🗜️", EDIT, g.clone());
             if multi {
-                push("merge_video", "Juntar", "🔗", g);
+                push("merge_video", "Juntar", "🔗", EDIT, g);
             }
         }
         Kind::Audio => {
@@ -125,16 +129,16 @@ pub fn list_actions(paths: &[PathBuf], tools: &Tools) -> Vec<ActionInfo> {
                 ("to_ogg", "OGG", "🔊", "ogg"),
             ] {
                 if !all_ext(e) {
-                    push(id, label, icon, g.clone());
+                    push(id, label, icon, CONV, g.clone());
                 }
             }
-            push("compress_audio", "Comprimir", "🗜️", g.clone());
+            push("compress_audio", "Comprimir", "🗜️", EDIT, g.clone());
             if multi {
-                push("merge_audio", "Juntar", "🔗", g);
+                push("merge_audio", "Juntar", "🔗", EDIT, g);
             }
         }
         Kind::Doc => {
-            push("doc_to_pdf", "PDF", "📄", gate(tools.soffice.is_some(), "Requer LibreOffice"));
+            push("doc_to_pdf", "PDF", "📄", CONV, gate(tools.soffice.is_some(), "Requer LibreOffice"));
         }
         Kind::Pdf | Kind::Other => {}
     }

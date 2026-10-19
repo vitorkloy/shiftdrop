@@ -10,11 +10,27 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "shadow",
+        "title": "ShiftDrop sombra",
+        "url": "shadow.html",
+        "width": 460,
+        "height": 460,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "shadow": false,
+        "dragDropEnabled": false
+      },
+      {
         "label": "radial",
         "title": "ShiftDrop",
         "url": "index.html",
-        "width": 340,
-        "height": 340,
+        "width": 380,
+        "height": 380,
         "resizable": false,
         "decorations": false,
         "transparent": true,
@@ -32,7 +48,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "shortDescription": "Shift + arrastar para converter arquivos",
     "longDescription": "ShiftDrop: segure Shift enquanto arrasta um arquivo para abrir um menu radial de conversões locais (imagem, vídeo, áudio, PDF).",
     "icon": [

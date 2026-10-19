@@ -240,6 +240,31 @@ fn images_to_pdf(paths: &[PathBuf], tools: &Tools) -> R<PathBuf> {
     Ok(out)
 }
 
+/// Miniatura PNG (para o centro do menu): imagens nativamente, vídeos via ffmpeg.
+pub fn thumbnail_png(p: &Path, tools: &Tools, size: u32) -> Option<Vec<u8>> {
+    let img = match actions::kind_of(p) {
+        actions::Kind::Image => load_image(p, tools).ok()?,
+        actions::Kind::Video => {
+            let ff = tools.ffmpeg.as_ref()?;
+            let tmp = temp_file("png");
+            let grab = |ss: &str| {
+                let mut a = ff_base();
+                a.extend([os("-ss"), os(ss), os("-i"), os(p), os("-frames:v"), os("1"), os("-vf"), os(format!("scale={}:-2", size * 2)), os(&tmp)]);
+                run_tool(ff, &a).is_ok() && tmp.is_file()
+            };
+            let ok = grab("1") || grab("0");
+            let r = if ok { image::open(&tmp).ok() } else { None };
+            let _ = std::fs::remove_file(&tmp);
+            r?
+        }
+        _ => return None,
+    };
+    let t = img.thumbnail(size, size);
+    let mut buf = std::io::Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(t.to_rgba8()).write_to(&mut buf, ImageFormat::Png).ok()?;
+    Some(buf.into_inner())
+}
+
 // ---------- vídeo / áudio (ffmpeg) ----------
 
 const MP4: &[&str] = &[

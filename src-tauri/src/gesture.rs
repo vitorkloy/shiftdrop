@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize};
 
 pub fn show_radial(app: &AppHandle, x: i32, y: i32, manual: bool) {
     let Some(win) = app.get_webview_window("radial") else { return };
-    let size = win.outer_size().unwrap_or(PhysicalSize::new(340, 340));
+    let size = win.outer_size().unwrap_or(PhysicalSize::new(380, 380));
     let (w, h) = (size.width as i32, size.height as i32);
     let (mut px, mut py) = (x - w / 2, y - h / 2);
     if let Ok(mons) = win.available_monitors() {
@@ -23,13 +23,49 @@ pub fn show_radial(app: &AppHandle, x: i32, y: i32, manual: bool) {
             }
         }
     }
+    let _ = app.emit("radial-show", serde_json::json!({ "manual": manual }));
+    // Sombra suave: janela maior, transparente e "fantasma" (não recebe mouse nem drop) atrás do disco.
+    if let Some(sh) = app.get_webview_window("shadow") {
+        if let Ok(ss) = sh.outer_size() {
+            let (cx, cy) = (px + w / 2, py + h / 2);
+            let _ = sh.set_position(PhysicalPosition::new(cx - ss.width as i32 / 2, cy - ss.height as i32 / 2));
+        }
+        let _ = sh.set_ignore_cursor_events(true);
+        let _ = sh.show();
+    }
     let _ = win.set_position(PhysicalPosition::new(px, py));
+    crate::glass::apply(&win);
     let _ = win.show();
     let _ = win.set_always_on_top(true);
     if manual {
         let _ = win.set_focus();
     }
-    let _ = app.emit("radial-show", serde_json::json!({ "manual": manual }));
+}
+
+pub fn hide_radial(app: &AppHandle) {
+    for label in ["radial", "shadow"] {
+        if let Some(w) = app.get_webview_window(label) {
+            let _ = w.hide();
+        }
+    }
+}
+
+/// Modo de demonstração: `shiftdrop.exe preview <arquivos...> [--hover N]` abre o menu
+/// no centro da tela já com os arquivos "arrastados" (usado para capturas/QA).
+pub fn preview(app: &AppHandle, paths: Vec<String>, hover: i32) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1200));
+        let (x, y) = app
+            .primary_monitor()
+            .ok()
+            .flatten()
+            .map(|m| (m.position().x + m.size().width as i32 / 2, m.position().y + m.size().height as i32 / 2))
+            .unwrap_or((800, 450));
+        show_radial(&app, x, y, false);
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let _ = app.emit("radial-preview", serde_json::json!({ "paths": paths, "hover": hover }));
+    });
 }
 
 pub fn show_at_cursor(app: &AppHandle) {

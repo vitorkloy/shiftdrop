@@ -4,7 +4,9 @@ Versão Windows do Tangerine (app de Mac): **segure Shift enquanto arrasta um ar
 
 Feito com Tauri v2 (Rust + HTML/JS simples). Roda na bandeja do sistema.
 
-![Menu radial: vazio, com WEBP em destaque e após a conversão](docs/menu-radial.png)
+![Menu radial do exe empacotado: imagem (2 anéis) e vídeo (1 anel)](docs/menu-radial.png)
+
+Visual no estilo Tangerine/macOS: disco de vidro com desfoque real (acrylic do Windows) recortado em círculo, sombra suave, setores sólidos com ícone + rótulo, destaque azul suave sob o cursor, miniatura do arquivo no centro e entrada em 150 ms (escala + fade). Com muitas ações, o anel interno mostra as categorias (Converter / Editar) e o externo, as ações.
 
 ## O que ele faz
 
@@ -45,6 +47,7 @@ shiftdrop.exe tools                         # ferramentas detectadas
 shiftdrop.exe actions foto.png              # ações possíveis (JSON)
 shiftdrop.exe convert to_webp foto.png      # converte, imprime o caminho de saída
 shiftdrop.exe convert merge_video a.mp4 b.mov
+shiftdrop.exe preview foto.jpg --hover 1  # abre o menu no centro da tela (demonstração/capturas)
 ```
 
 ## Desenvolvimento
