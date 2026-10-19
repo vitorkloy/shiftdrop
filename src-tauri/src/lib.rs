@@ -121,6 +121,11 @@ pub fn run() {
                 std::env::args().collect::<Vec<_>>()
             ));
             logx::log(format!("ferramentas: {:?}", tools::Tools::detect()));
+            if let Some(w) = app.get_webview_window("radial") {
+                let px = gesture::wheel_px();
+                let _ = w.set_size(tauri::LogicalSize::new(px, px));
+                logx::log(format!("roda: escala {} → janela {px}x{px} px lógicos", gesture::ui_scale()));
+            }
             catcher::init(app.handle());
             tray::build(app)?;
             gesture::spawn(app.handle().clone());

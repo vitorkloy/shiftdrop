@@ -39,8 +39,16 @@ invoke("accent_color").then((c) => {
   console.log(`acento do sistema: ${c || "(padrão laranja)"}`);
 }).catch(() => {});
 const VIEW = 252;           // unidades do viewBox (−126…126)
-const PX = 290;             // tamanho da janela em px lógicos
-const S = PX / VIEW;        // px por unidade
+// Tamanho real da janela (Rust aplica SHIFTDROP_SCALE, padrão 0.75 × 290 px).
+let PX = 290, S = PX / VIEW;
+function fit() {
+  PX = Math.min(window.innerWidth, window.innerHeight) || 218;
+  S = PX / VIEW;
+  svg.setAttribute("width", PX);
+  svg.setAttribute("height", PX);
+  document.documentElement.style.setProperty("--k", (PX / 290).toFixed(4));
+}
+window.addEventListener("resize", fit);
 // Medidas do site (m = {inner, outer, backdrop, gap, corner, labelInner}).
 const M = {
   inner: 48 * 0.8 * 1.1 + 8 * 0.8,
@@ -310,5 +318,6 @@ T.event.listen("gesture-end", () => {
 
 window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !busy) hide(); });
 
+fit();
 render();
-console.log("main.js carregado");
+console.log(`main.js carregado (roda ${PX}px)`);

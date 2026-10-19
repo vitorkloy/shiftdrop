@@ -193,7 +193,7 @@ mod imp {
                 log("catcher: show sem janela");
                 return;
             };
-            CENTER_R.store((50.0 * scale) as u32, Ordering::Relaxed);
+            CENTER_R.store((50.0 * scale * crate::gesture::ui_scale()) as u32, Ordering::Relaxed);
             let ok = SetWindowPos(hw, Some(HWND_TOPMOST), x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
             let rgn = CreateEllipticRgn(0, 0, w + 1, h + 1);
             let r = SetWindowRgn(hw, Some(rgn), true);

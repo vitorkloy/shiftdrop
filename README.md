@@ -14,7 +14,7 @@ Feito com Tauri v2 (Rust + HTML/JS simples). Fica na bandeja do sistema.
 | **Ctrl** | File tools | comprimir, metadados, cortar, juntar… |
 | **Alt** | File actions | copiar, mover, copiar caminho, terminal (vale para pastas também) |
 
-A roda fica aberta até você soltar. Dá para trocar de roda no meio do arraste tocando outra tecla. Soltar no centro cancela. Para trocar as teclas, use `SHIFTDROP_KEYS=convert,tools,actions` (ex. `ctrl,shift,alt`).
+A roda fica aberta até você soltar. Dá para trocar de roda no meio do arraste tocando outra tecla. Soltar no centro cancela. Tamanho: `SHIFTDROP_SCALE` (padrão `0.75`; `1` = tamanho do Tangerine). Para trocar as teclas, use `SHIFTDROP_KEYS=convert,tools,actions` (ex. `ctrl,shift,alt`).
 
 Forma e layout seguem o Tangerine; o acabamento é Windows 11: tema claro/escuro do sistema, cor de acento do Windows no setor ativo (fallback laranja `#ff5200`), Segoe UI Variable, ícones Segoe Fluent Icons. Sem acrylic do DWM (ele ignora o recorte circular e pintava um quadrado atrás da roda); rótulos em CAPS, pílula branca no centro com a opção sob o cursor e entrada "bloom" de 200 ms. O número de setores varia por tipo: 2 viram semicírculos e 1 vira um anel inteiro. Sem botões magnéticos e sem cursor customizado.
 

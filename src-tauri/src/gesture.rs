@@ -39,6 +39,21 @@ pub fn show_radial(app: &AppHandle, x: i32, y: i32, manual: bool) {
     }
 }
 
+/// Escala da roda: SHIFTDROP_SCALE (0.4–2.0), padrão 0.75 do tamanho original (290 px).
+pub fn ui_scale() -> f64 {
+    std::env::var("SHIFTDROP_SCALE")
+        .ok()
+        .and_then(|v| v.trim().replace(',', ".").parse::<f64>().ok())
+        .filter(|v| v.is_finite())
+        .map(|v| v.clamp(0.4, 2.0))
+        .unwrap_or(0.75)
+}
+
+/// Lado da janela da roda em px lógicos.
+pub fn wheel_px() -> f64 {
+    (290.0 * ui_scale()).round()
+}
+
 pub fn hide_radial(app: &AppHandle) {
     crate::catcher::hide(app);
     if let Some(w) = app.get_webview_window("radial") {

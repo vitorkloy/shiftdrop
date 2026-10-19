@@ -61,7 +61,7 @@ html, body {
 .icon { fill: var(--text); font: 15px var(--icons); pointer-events: none; }
 
 #pill {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(var(--k, 1));
   display: grid; place-items: center; box-sizing: border-box;
   min-width: 80px; max-width: 200px; min-height: 34px; padding: 5px 10px;
   border-radius: 8px;
@@ -80,7 +80,7 @@ html, body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 #empty {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(var(--k, 1));
   width: 200px; box-sizing: border-box; padding: 16px;
   border-radius: 8px; background: var(--card); border: 1px solid var(--pill-stroke);
   color: var(--text); opacity: .85; font: 400 12.5px/1.55 var(--font); text-align: center;
