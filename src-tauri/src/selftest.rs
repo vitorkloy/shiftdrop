@@ -21,7 +21,6 @@ pub fn start(app: &AppHandle, file: String, do_drop: bool) {
     use std::time::Duration;
     use tauri::Manager;
     ACTIVE.store(true, Ordering::Relaxed);
-    let _ = std::fs::remove_file(std::env::temp_dir().join("shiftdrop-drag.log"));
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(1500));
@@ -51,7 +50,7 @@ pub fn start(app: &AppHandle, file: String, do_drop: bool) {
                 let _ = tx.send(f());
             });
             let r = rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| "timeout".into());
-            crate::drag::log(&format!("selftest {name}: {r}"));
+            crate::logx::log(&format!("selftest {name}: {r}"));
         };
         let f = file.clone();
         step("DragEnter", Box::new(move || ole::enter(&f, px, py)));
@@ -71,62 +70,48 @@ pub fn start(app: &AppHandle, file: String, do_drop: bool) {
 #[cfg(windows)]
 mod ole {
     use std::cell::RefCell;
-    use windows::core::{Interface, HSTRING, PCWSTR};
-    use windows::Win32::Foundation::{HWND, POINTL};
+    use windows::core::{Interface, HSTRING};
+    use windows::Win32::Foundation::{POINT, POINTL};
     use windows::Win32::System::Com::IDataObject;
     use windows::Win32::System::Ole::{IDropTarget, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_MOVE};
     use windows::Win32::System::SystemServices::{MK_LBUTTON, MK_SHIFT};
     use windows::Win32::UI::Shell::{BHID_DataObject, IShellItem, SHCreateItemFromParsingName};
-    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, GetClassNameW, GetPropW, GetWindow, GW_CHILD, GW_HWNDNEXT};
+    use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetParent, GetPropW, WindowFromPoint};
 
     thread_local! {
         static STATE: RefCell<Option<(IDropTarget, IDataObject)>> = const { RefCell::new(None) };
     }
 
-    /// Coleta todas as janelas com IDropTarget registrado (como o OLE faz, o alvo
-    /// real é a janela filha mais profunda sob o cursor: a do WebView2).
-    fn collect(hwnd: HWND, depth: u32, out: &mut Vec<(u32, HWND, String)>) {
+    /// Como o OLE faz: janela sob o ponto (WindowFromPoint) e sobe pelos pais
+    /// até achar uma com drop target registrado.
+    fn target_at(x: i32, y: i32) -> (Option<IDropTarget>, String) {
+        let mut chain = Vec::new();
         unsafe {
-            let raw = GetPropW(hwnd, &HSTRING::from("OleDropTargetInterface"));
-            if !raw.is_invalid() && !raw.0.is_null() {
+            let mut h = WindowFromPoint(POINT { x, y });
+            while !h.0.is_null() {
                 let mut buf = [0u16; 128];
-                let n = GetClassNameW(hwnd, &mut buf) as usize;
-                out.push((depth, hwnd, String::from_utf16_lossy(&buf[..n])));
-            }
-            if depth > 8 {
-                return;
-            }
-            let mut child = GetWindow(hwnd, GW_CHILD).ok();
-            while let Some(c) = child {
-                if c.0.is_null() {
-                    break;
+                let n = GetClassNameW(h, &mut buf) as usize;
+                let class = String::from_utf16_lossy(&buf[..n]);
+                let raw = GetPropW(h, &HSTRING::from("OleDropTargetInterface"));
+                let has = !raw.is_invalid() && !raw.0.is_null();
+                chain.push(format!("{class}{}", if has { "[alvo]" } else { "" }));
+                if has {
+                    return (IDropTarget::from_raw_borrowed(&raw.0).cloned(), chain.join(" > "));
                 }
-                collect(c, depth + 1, out);
-                child = GetWindow(c, GW_HWNDNEXT).ok();
+                h = match GetParent(h) {
+                    Ok(p) => p,
+                    Err(_) => break,
+                };
             }
         }
-    }
-
-    fn find_target(top: HWND) -> (Option<IDropTarget>, String) {
-        let mut all = Vec::new();
-        collect(top, 0, &mut all);
-        let desc = all.iter().map(|(d, h, c)| format!("{c}@{d}({:?})", h.0)).collect::<Vec<_>>().join(", ");
-        let best = all.iter().max_by_key(|(d, _, _)| *d).and_then(|(_, h, _)| unsafe {
-            let raw = GetPropW(*h, &HSTRING::from("OleDropTargetInterface"));
-            IDropTarget::from_raw_borrowed(&raw.0).cloned()
-        });
-        (best, desc)
+        (None, chain.join(" > "))
     }
 
     const KEYS: u32 = MK_LBUTTON.0 | MK_SHIFT.0;
 
     pub fn enter(file: &str, x: i32, y: i32) -> String {
         unsafe {
-            let top = match FindWindowW(PCWSTR::null(), &HSTRING::from("ShiftDrop")) {
-                Ok(h) => h,
-                Err(e) => return format!("janela não encontrada: {e}"),
-            };
-            let (target, desc) = find_target(top);
+            let (target, desc) = target_at(x, y);
             let Some(target) = target else { return format!("nenhum IDropTarget registrado ({desc})") };
             let item: IShellItem = match SHCreateItemFromParsingName(&HSTRING::from(file), None) {
                 Ok(i) => i,
@@ -139,7 +124,7 @@ mod ole {
             let mut effect = DROPEFFECT(DROPEFFECT_COPY.0 | DROPEFFECT_MOVE.0);
             let r = target.DragEnter(&data, windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS(KEYS), POINTL { x, y }, &mut effect);
             STATE.with(|s| *s.borrow_mut() = Some((target, data)));
-            format!("{r:?} effect={} at ({x},{y}); alvos: [{desc}] -> usando o mais profundo", effect.0)
+            format!("{r:?} effect={} at ({x},{y}); janela sob o ponto: {desc} ", effect.0)
         }
     }
 

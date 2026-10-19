@@ -3,8 +3,7 @@
   "identifier": "default",
   "description": "Permissões da janela do menu radial",
   "windows": [
-    "radial",
-    "shadow"
+    "radial"
   ],
   "permissions": [
     "core:default"

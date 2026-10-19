@@ -23,30 +23,26 @@ pub fn show_radial(app: &AppHandle, x: i32, y: i32, manual: bool) {
             }
         }
     }
+    crate::logx::log(format!("menu: mostrar em ({px},{py}) {w}x{h} cursor=({x},{y}) manual={manual}"));
     let _ = app.emit("radial-show", serde_json::json!({ "manual": manual }));
-    // Sombra suave: janela maior, transparente e "fantasma" (não recebe mouse nem drop) atrás do disco.
-    if let Some(sh) = app.get_webview_window("shadow") {
-        if let Ok(ss) = sh.outer_size() {
-            let (cx, cy) = (px + w / 2, py + h / 2);
-            let _ = sh.set_position(PhysicalPosition::new(cx - ss.width as i32 / 2, cy - ss.height as i32 / 2));
-        }
-        let _ = sh.set_ignore_cursor_events(true);
-        let _ = sh.show();
-    }
     let _ = win.set_position(PhysicalPosition::new(px, py));
     crate::glass::apply(&win);
     let _ = win.show();
     let _ = win.set_always_on_top(true);
+    // Reaplica o recorte depois de exibir (o tamanho final pode mudar com o DPI do monitor).
+    crate::glass::apply(&win);
+    let size = win.outer_size().unwrap_or(size);
+    let scale = win.scale_factor().unwrap_or(1.0);
+    crate::catcher::show(app, px, py, size.width as i32, size.height as i32, scale);
     if manual {
         let _ = win.set_focus();
     }
 }
 
 pub fn hide_radial(app: &AppHandle) {
-    for label in ["radial", "shadow"] {
-        if let Some(w) = app.get_webview_window(label) {
-            let _ = w.hide();
-        }
+    crate::catcher::hide(app);
+    if let Some(w) = app.get_webview_window("radial") {
+        let _ = w.hide();
     }
 }
 
@@ -152,6 +148,7 @@ mod imp {
         std::thread::Builder::new()
             .name("shiftdrop-gesture".into())
             .spawn(move || {
+                crate::logx::log("gesto: thread de detecção iniciada (15 ms)");
                 let mut down = false;
                 let mut armed = false;
                 let mut shown = false;
@@ -163,12 +160,21 @@ mod imp {
                         down = true;
                         origin = cursor_pos();
                         armed = is_file_source(origin.0, origin.1);
+                        if armed && pressed(VK_SHIFT) {
+                            crate::logx::log(format!("gesto: clique com Shift em gerenciador de arquivos em {:?}", origin));
+                        }
                     } else if left && down {
                         if armed && !shown && pressed(VK_SHIFT) {
                             let (x, y) = cursor_pos();
                             let (dx, dy) = (x - origin.0, y - origin.1);
                             if dx * dx + dy * dy > THRESHOLD_PX * THRESHOLD_PX {
                                 shown = true;
+                                crate::logx::log(format!(
+                                    "gesto: Shift+arrastar detectado (origem {:?} -> {:?}, processo {:?})",
+                                    origin,
+                                    (x, y),
+                                    process_name_at(origin.0, origin.1)
+                                ));
                                 show_radial(&app, x, y, false);
                             }
                         }
@@ -177,6 +183,7 @@ mod imp {
                         armed = false;
                         if shown {
                             shown = false;
+                            crate::logx::log("gesto: botão solto (fim do arraste)");
                             let _ = app.emit("gesture-end", ());
                         }
                     }

@@ -10,22 +10,6 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "label": "shadow",
-        "title": "ShiftDrop sombra",
-        "url": "shadow.html",
-        "width": 460,
-        "height": 460,
-        "resizable": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "visible": false,
-        "focus": false,
-        "shadow": false,
-        "dragDropEnabled": false
-      },
-      {
         "label": "radial",
         "title": "ShiftDrop",
         "url": "index.html",

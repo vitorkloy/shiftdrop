@@ -8,7 +8,7 @@ Feito com Tauri v2 (Rust + HTML/JS simples). Roda na bandeja do sistema.
 
 ![Autoteste OLE: setores montados no DragEnter e conversão após o Drop](docs/drag-ole-teste.png)
 
-Visual no estilo Tangerine/macOS: disco de vidro com desfoque real (acrylic do Windows) recortado em círculo, sombra suave, setores sólidos com ícone + rótulo, destaque azul suave sob o cursor, miniatura do arquivo no centro e entrada em 150 ms (escala + fade). Com muitas ações, o anel interno mostra as categorias (Converter / Editar) e o externo, as ações.
+Visual no estilo Tangerine/macOS: disco de vidro com desfoque real (acrylic do Windows) recortado em círculo (sem janela de sombra), setores sólidos com ícone + rótulo, destaque azul suave sob o cursor, miniatura do arquivo no centro e entrada em 150 ms (escala + fade). Com muitas ações, o anel interno mostra as categorias (Converter / Editar) e o externo, as ações.
 
 ## O que ele faz
 
@@ -68,6 +68,3 @@ Autoteste do arrastar (OLE de verdade, sem mouse): abre o overlay, cria o IDataO
 shiftdrop.exe selftest-drag C:\caminho\cat6.JPEG --drop   # solta no setor do topo (WEBP para imagens)
 ```
 
-## Como funciona o gesto
-
-Uma thread consulta o estado global do botão esquerdo e do Shift (`GetAsyncKeyState`) a cada 15 ms. Se o clique começou numa janela do Explorer e o cursor andou com Shift pressionado, a janela transparente do menu é exibida centrada no cursor. Ela é um alvo de drop normal do Windows, então o arraste em andamento cai direto nela. Sem hook de baixo nível e sem injetar DLL.

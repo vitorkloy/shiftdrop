@@ -2,6 +2,20 @@
 // cursor customizado: só realce suave do setor sob o cursor.
 const T = window.__TAURI__;
 const invoke = T.core.invoke;
+
+// Console do JS → %LOCALAPPDATA%\ShiftDrop\log.txt
+const jsLog = (level, args) => {
+  try {
+    const msg = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+    invoke("js_log", { level, msg }).catch(() => {});
+  } catch (_) {}
+};
+for (const level of ["log", "warn", "error"]) {
+  const orig = console[level].bind(console);
+  console[level] = (...a) => { orig(...a); jsLog(level, a); };
+}
+window.addEventListener("error", (e) => jsLog("error", [`${e.message} @${e.filename}:${e.lineno}:${e.colno}`]));
+window.addEventListener("unhandledrejection", (e) => jsLog("error", ["promise: " + ((e.reason && e.reason.message) || e.reason)]));
 const NS = "http://www.w3.org/2000/svg";
 const C = 190;
 const GAP = 1.5; // meia-largura do vão entre setores, em px
@@ -36,7 +50,7 @@ const ACTION_ICON = {
   compress_image: "compress", compress_video: "compress", compress_audio: "compress",
   crop_square: "crop", resize_half: "resize", to_mp4: "film", to_webm: "globe", to_gif: "gif",
   extract_mp3: "music", to_mp3: "music", to_wav: "wave", to_ogg: "speaker",
-  merge_video: "link", merge_audio: "link",
+  merge_video: "link", merge_audio: "link", compress: "compress",
 };
 
 let actions = [];
@@ -49,6 +63,7 @@ let dropped = false;
 let hideTimer = null;
 let idle = ["ShiftDrop", "Solte numa opção"];
 let currentPaths = [];
+let token = 0; // invalida resultados assíncronos antigos
 
 const basename = (p) => String(p).split(/[\\/]/).pop();
 const ext = (p) => (basename(p).split(".").pop() || "").toUpperCase().slice(0, 4);
@@ -157,7 +172,6 @@ function hitTest(pos) {
   const g = geo();
   if (d < g.center) return -2;
   if (d > g.out2 + 4 || !actions.length) return -1;
-  if (twoRings && d < g.out1) return -3;
   const step = (2 * Math.PI) / actions.length;
   const a = (((Math.atan2(x, -y) - rot) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   return Math.round(a / step) % actions.length;
@@ -186,11 +200,8 @@ function hide() {
 }
 function hideSoon(ms) { clearTimeout(hideTimer); hideTimer = setTimeout(hide, ms); }
 
-async function onEnter(paths) {
-  clearTimeout(hideTimer);
-  currentPaths = paths;
-  // Sem caminho (não deveria acontecer): setores genéricos, resolvidos no drop.
-  actions = paths.length ? await invoke("list_actions", { paths }) : await invoke("generic_actions");
+function applyActions(list) {
+  actions = list;
   groups = [];
   actions.forEach((a, i) => {
     const last = groups[groups.length - 1];
@@ -200,10 +211,43 @@ async function onEnter(paths) {
   twoRings = groups.length > 1 && actions.length > 5;
   rot = twoRings ? -((groups[0].first + groups[0].last) / 2) * ((2 * Math.PI) / actions.length) : 0;
   hover = -1;
-  if (!actions.length) idle = ["Sem ações", "Tipo não suportado", "err"];
-  else if (!paths.length) idle = ["Arquivo", "Escolha uma opção", ""];
-  else idle = [paths.length > 1 ? `${paths.length} arquivos` : basename(paths[0]), "Escolha uma opção", ""];
   render();
+}
+
+// Setores genéricos: aparecem SEMPRE ao abrir; trocados pelos específicos quando o caminho chega.
+async function showGeneric() {
+  const my = ++token;
+  let list = [];
+  try { list = await invoke("generic_actions"); } catch (e) { console.error("generic_actions falhou", String(e)); }
+  if (my !== token) return;
+  currentPaths = [];
+  applyActions(list);
+  idleCenter();
+  console.log(`menu: ${list.length} setores genéricos desenhados`);
+}
+
+async function onEnter(paths) {
+  clearTimeout(hideTimer);
+  if (!paths.length) {
+    console.warn("enter sem caminhos: mantendo setores genéricos");
+    if (!actions.length) await showGeneric();
+    return;
+  }
+  const my = ++token;
+  currentPaths = paths;
+  let list = [];
+  try { list = await invoke("list_actions", { paths }); } catch (e) { console.error("list_actions falhou", String(e)); }
+  if (my !== token) return;
+  if (!list.length) {
+    console.warn("tipo sem ações específicas; mantendo genéricos", paths);
+    idle = ["Sem ações", "Tipo não suportado", "err"];
+    setCenter(...idle);
+    return;
+  }
+  actions = list;
+  applyActions(list);
+  console.log(`menu: ${list.length} setores para ${paths.length} arquivo(s): ${list.map((a) => a.id).join(",")}`);
+  idle = [paths.length > 1 ? `${paths.length} arquivos` : basename(paths[0]), "Escolha uma opção", ""];
   setThumbIcon("file", ext(paths[0] || ""));
   setCenter(...idle);
   if (paths.length === 1) {
@@ -216,6 +260,11 @@ async function onEnter(paths) {
 async function onDrop(paths, idx) {
   dropped = true;
   const a = actions[idx];
+  console.log(`drop: setor=${idx} ação=${a ? a.id : "-"} arquivos=${JSON.stringify(paths)}`);
+  if (a && !paths.length) {
+    setCenter("Sem arquivo", "O arraste não trouxe caminho", "err");
+    return hideSoon(1800);
+  }
   if (idx < 0 || !a) return hideSoon(120);
   if (!a.available) {
     setCenter("Indisponível", a.reason, "err");
@@ -228,9 +277,11 @@ async function onDrop(paths, idx) {
     const outs = await invoke("run_action", { actionId: a.id, paths });
     setThumbIcon(ACTION_ICON[a.id] || "file");
     setCenter("Pronto", outs.length === 1 ? basename(outs[0]) : `${outs.length} arquivos`, "ok");
+    console.log("conversão ok:", outs);
   } catch (e) {
     setThumbIcon("file");
     setCenter("Erro", String(e).slice(0, 80), "err");
+    console.error("conversão falhou:", String(e));
   }
   busy = false;
   hideSoon(1800);
@@ -256,11 +307,14 @@ T.event.listen("sd-drag", async (ev) => {
 T.event.listen("radial-show", (e) => {
   clearTimeout(hideTimer);
   const manual = !!(e.payload && e.payload.manual);
+  console.log(`radial-show manual=${manual}`);
+  token++;
   actions = []; groups = []; twoRings = false; rot = 0; hover = -1; busy = false; dropped = false; currentPaths = [];
   idle = ["ShiftDrop", manual ? "Arraste um arquivo até aqui" : "Solte numa opção", ""];
   render();
   idleCenter();
   root.classList.remove("in"); void root.offsetWidth; root.classList.add("in");
+  showGeneric();
   if (manual) hideSoon(15000);
 });
 
@@ -269,6 +323,8 @@ T.event.listen("radial-preview", async (e) => {
   await onEnter(e.payload.paths || []);
   setHover(e.payload.hover);
 });
+
+T.event.listen("sd-cancel", () => { if (!busy) hide(); });
 
 T.event.listen("gesture-end", () => {
   setTimeout(() => { if (!dropped && !busy) hide(); }, 600);
@@ -279,3 +335,4 @@ window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !busy) hid
 
 render();
 idleCenter();
+console.log("main.js carregado");

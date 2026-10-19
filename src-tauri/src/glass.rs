@@ -33,7 +33,8 @@ pub fn apply(window: &tauri::WebviewWindow) {
 
     unsafe {
         let rgn = CreateEllipticRgn(0, 0, size.width as i32 + 1, size.height as i32 + 1);
-        SetWindowRgn(hwnd, rgn, 1);
+        let r = SetWindowRgn(hwnd, rgn, 1);
+        crate::logx::log(format!("vidro: região circular {}x{} aplicada={}", size.width, size.height, r != 0));
 
         let user32: Vec<u16> = "user32.dll\0".encode_utf16().collect();
         let module = GetModuleHandleW(user32.as_ptr());

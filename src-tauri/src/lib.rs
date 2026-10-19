@@ -4,7 +4,9 @@ pub mod convert;
 pub mod pdf;
 pub mod tools;
 
+mod catcher;
 mod drag;
+mod logx;
 mod gesture;
 mod selftest;
 mod glass;
@@ -38,6 +40,12 @@ async fn run_action(action_id: String, paths: Vec<String>) -> Result<Vec<String>
     .map_err(|e| e.to_string())?
 }
 
+/// Console do JS → log em arquivo.
+#[tauri::command]
+fn js_log(level: String, msg: String) {
+    logx::log(format!("js[{level}] {msg}"));
+}
+
 #[tauri::command]
 fn hide_radial(app: tauri::AppHandle) {
     gesture::hide_radial(&app);
@@ -58,7 +66,17 @@ async fn thumbnail(path: String) -> Option<String> {
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            logx::log(format!("segunda instância chamada com {:?}", args));
+            // `shiftdrop.exe debug-show [x y]`: abre o menu como o gesto (sem arquivo) na instância que já roda.
+            if args.get(1).map(|a| a == "debug-show").unwrap_or(false) {
+                let xy = (args.get(2).and_then(|v| v.parse().ok()), args.get(3).and_then(|v| v.parse().ok()));
+                match xy {
+                    (Some(x), Some(y)) => gesture::show_radial(app, x, y, false),
+                    _ => gesture::show_at_cursor(app),
+                }
+            }
+        }))
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::DragDrop(e) = event {
                 drag::forward(window.app_handle(), window.label(), e);
@@ -69,8 +87,17 @@ pub fn run() {
                 drag::forward(webview.app_handle(), webview.label(), e);
             }
         })
-        .invoke_handler(tauri::generate_handler![list_actions, generic_actions, run_action, hide_radial, thumbnail])
+        .invoke_handler(tauri::generate_handler![js_log, list_actions, generic_actions, run_action, hide_radial, thumbnail])
         .setup(|app| {
+            logx::log(format!(
+                "==== ShiftDrop {} iniciado: exe={:?} pid={} args={:?}",
+                env!("CARGO_PKG_VERSION"),
+                std::env::current_exe().ok(),
+                std::process::id(),
+                std::env::args().collect::<Vec<_>>()
+            ));
+            logx::log(format!("ferramentas: {:?}", tools::Tools::detect()));
+            catcher::init(app.handle());
             tray::build(app)?;
             gesture::spawn(app.handle().clone());
             let args: Vec<String> = std::env::args().skip(1).collect();
