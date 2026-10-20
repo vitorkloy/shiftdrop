@@ -98,3 +98,29 @@ As conversões usam as ferramentas do sistema, procuradas no PATH e também em `
 - Debian/Ubuntu: `sudo apt install ffmpeg imagemagick pandoc ghostscript libreoffice` (o `.deb` já puxa ffmpeg e imagemagick).
 
 O que faltar aparece desabilitado na roda com o motivo ("Requer …").
+
+## Dependências embutidas (v0.3.0): o usuário não instala nada
+
+| Plataforma | Embutido no instalador | Baixado no 1º uso (pasta de dados do app) |
+|---|---|---|
+| Windows | ffmpeg + ffprobe, ImageMagick portable, pandoc, Ghostscript (`<pasta do app>\tools`) | LibreOffice: MSI oficial extraído sem admin em `%LOCALAPPDATA%\ShiftDrop\tools\LibreOffice` |
+| macOS | — | ffmpeg/ffprobe (evermeet.cx), pandoc (GitHub), em `~/Library/Application Support/ShiftDrop/tools` |
+| Linux | — | ffmpeg/ffprobe estáticos (johnvansickle.com, x86_64), pandoc, em `~/.local/share/shiftdrop/tools` |
+
+O que já existe no sistema tem preferência só quando não há cópia embutida. Durante o download a roda mostra `BAIXANDO LIBREOFFICE 42%`. Miniaturas e a listagem das rodas nunca disparam downloads, só soltar numa ação. `SHIFTDROP_TOOLS=<pasta>` aponta para outra pasta de ferramentas.
+
+Ainda não baixados no macOS/Linux: ImageMagick, Ghostscript e LibreOffice (use `brew`/`apt`, veja acima). As conversões de imagem básicas (PNG/JPG/WEBP/BMP/TIFF/GIF) são nativas e não precisam deles.
+
+No CI, `scripts/fetch-tools-windows.ps1` baixa as ferramentas antes do `tauri build`. Rode o mesmo script localmente para gerar o instalador completo.
+
+### Licenças de terceiros
+
+O ShiftDrop é MIT. As ferramentas são programas independentes, distribuídos junto (agregação) e chamados como processos externos, cada um com sua licença:
+
+- **FFmpeg** (build "essentials" de gyan.dev): GPLv3. Código-fonte em https://ffmpeg.org e https://www.gyan.dev/ffmpeg/builds/.
+- **ImageMagick**: ImageMagick License (Apache-2.0-like), https://imagemagick.org/script/license.php.
+- **pandoc**: GPLv2+, https://github.com/jgm/pandoc.
+- **Ghostscript**: AGPLv3, https://ghostscript.com (código em https://github.com/ArtifexSoftware/ghostpdl).
+- **LibreOffice** (baixado, não redistribuído): MPL-2.0, https://www.libreoffice.org/about-us/licenses.
+
+Os textos de licença ficam em `tools\LICENSE-*.txt` quando o pacote original os inclui.

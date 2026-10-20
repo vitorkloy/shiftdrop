@@ -5,6 +5,7 @@ pub mod pdf;
 pub mod tools;
 pub mod wheels;
 pub mod fileactions;
+pub mod deps;
 
 mod catcher;
 mod drag;
@@ -43,7 +44,7 @@ fn generic_actions() -> Vec<actions::ActionInfo> {
 #[tauri::command]
 async fn run_action(action_id: String, paths: Vec<String>) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        convert::run_action(&action_id, &to_paths(paths), &tools::Tools::detect())
+        deps::allow_downloads(|| convert::run_action(&action_id, &to_paths(paths), &tools::Tools::detect()))
             .map(|v| v.into_iter().map(|p| p.display().to_string()).collect())
     })
     .await
@@ -133,6 +134,7 @@ pub fn run() {
                 let _ = w.set_size(tauri::LogicalSize::new(px, px));
                 logx::log(format!("roda: escala {} → janela {px}x{px} px lógicos", gesture::ui_scale()));
             }
+            deps::init(app.handle());
             catcher::init(app.handle());
             tray::build(app)?;
             gesture::spawn(app.handle().clone());

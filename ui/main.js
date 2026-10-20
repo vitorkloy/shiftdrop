@@ -321,3 +321,12 @@ window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !busy) hid
 fit();
 render();
 console.log(`main.js carregado (roda ${PX}px)`);
+
+// Download sob demanda de uma ferramenta (ex. LibreOffice no 1º uso).
+T.event.listen("dep-progress", (e) => {
+  if (!busy) return;
+  const { tool, pct, phase } = e.payload || {};
+  if (phase === "download") setPill(`BAIXANDO ${String(tool).toUpperCase()} ${pct}%`, "msg");
+  else if (phase === "install") setPill(`INSTALANDO ${String(tool).toUpperCase()}`, "msg");
+  else if (phase === "done") { pill.className = ""; pill.innerHTML = '<div class="spin"></div>'; }
+});

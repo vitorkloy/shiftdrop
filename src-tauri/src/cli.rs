@@ -34,7 +34,7 @@ pub fn run(args: &[String]) -> i32 {
             println!("{}", serde_json::to_string_pretty(&w).unwrap());
             0
         }
-        Some("convert") if args.len() >= 3 => match convert::run_action(&args[1], &paths(&args[2..]), &tools) {
+        Some("convert") if args.len() >= 3 => match crate::deps::allow_downloads(|| convert::run_action(&args[1], &paths(&args[2..]), &tools)) {
             Ok(outs) => {
                 for o in outs {
                     println!("{}", o.display());

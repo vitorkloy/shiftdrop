@@ -23,7 +23,7 @@ impl Tools {
         let ffprobe = ffmpeg
             .as_ref()
             .map(|p| p.with_file_name(exe("ffprobe")))
-            .filter(|p| p.is_file())
+            .filter(|p| p.is_file() || crate::deps::planned("ffprobe").as_ref() == Some(p))
             .or_else(|| find("ffprobe", &[]));
         let magick = find("magick", &program_files_glob("ImageMagick", "magick.exe"));
         let soffice = find("soffice", &soffice_fallbacks());
@@ -50,6 +50,20 @@ fn find(name: &str, fallbacks: &[PathBuf]) -> Option<PathBuf> {
             return Some(p);
         }
     }
+    // Embutidas no pacote: <raiz>/<nome> ou <raiz>/<subpasta>/<nome>.
+    let file = exe(name);
+    for root in crate::deps::bundled_roots() {
+        let mut dirs = vec![root.clone()];
+        dirs.extend(subdirs(&root));
+        dirs.extend(subdirs(&root).iter().map(|d| d.join("bin")));
+        if let Some(p) = dirs.into_iter().map(|d| d.join(&file)).find(|p| p.is_file()) {
+            return Some(p);
+        }
+    }
+    // SHIFTDROP_NO_SYSTEM=1 ignora o que está instalado no sistema (simula uma máquina limpa).
+    if std::env::var_os("SHIFTDROP_NO_SYSTEM").is_some() {
+        return crate::deps::planned(name);
+    }
     if let Ok(p) = which::which(name) {
         return Some(p);
     }
@@ -64,7 +78,8 @@ fn find(name: &str, fallbacks: &[PathBuf]) -> Option<PathBuf> {
             return Some(p);
         }
     }
-    None
+    // Baixada antes (ou a baixar no 1º uso).
+    crate::deps::planned(name)
 }
 
 fn subdirs(dir: &Path) -> Vec<PathBuf> {
@@ -145,6 +160,12 @@ fn soffice_fallbacks() -> Vec<PathBuf> {
 
 /// Cria um Command que não abre janela de console no Windows.
 pub fn command(program: &Path) -> Command {
+    crate::deps::ensure(program);
+    raw_command(program)
+}
+
+/// Como `command`, sem disparar download.
+pub fn raw_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     #[allow(unused_mut)]
     let mut c = Command::new(program);
     #[cfg(windows)]
