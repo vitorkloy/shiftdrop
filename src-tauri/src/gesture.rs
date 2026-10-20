@@ -8,8 +8,10 @@
 //! solta o arquivo em cima da opção desejada.
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
 
-pub fn show_radial(app: &AppHandle, x: i32, y: i32, manual: bool) {
-    let Some(win) = crate::ui::window(app) else { return };
+pub fn show_radial(app: &AppHandle, x: i32, y: i32, manual: bool) -> bool {
+    // O gesto não pode bloquear na criação do WebView: o mouse-up ficaria na fila
+    // e a roda abria e fechava sozinha. manual (bandeja/preview) espera a janela.
+    let Some(win) = (if manual { crate::ui::window(app) } else { crate::ui::try_window(app) }) else { return false };
     let size = win.outer_size().unwrap_or(PhysicalSize::new(290, 290));
     let (w, h) = (size.width as i32, size.height as i32);
     let (mut px, mut py) = (x - w / 2, y - h / 2);
@@ -37,6 +39,12 @@ pub fn show_radial(app: &AppHandle, x: i32, y: i32, manual: bool) {
     if manual {
         let _ = win.set_focus();
     }
+    true
+}
+
+/// Avisa a thread do gesto que a janela da roda ficou pronta.
+pub fn poke() {
+    imp::poke();
 }
 
 /// Escala da roda: SHIFTDROP_SCALE (0.4–2.0), padrão 0.75 do tamanho original (290 px).
@@ -74,6 +82,7 @@ pub fn preview(app: &AppHandle, paths: Vec<String>, hover: i32, mode: String) {
             .flatten()
             .map(|m| (m.position().x + m.size().width as i32 / 2, m.position().y + m.size().height as i32 / 2))
             .unwrap_or((800, 450));
+        let _ = crate::ui::window(&app);
         show_radial(&app, x, y, false);
         std::thread::sleep(std::time::Duration::from_millis(300));
         crate::ui::emit(&app, "radial-preview", serde_json::json!({ "paths": paths, "hover": hover, "mode": mode }));
@@ -124,6 +133,14 @@ mod imp {
         Move(i32, i32),
         Up,
         Key(u16),
+        /// A janela da roda terminou de ser criada.
+        Tick,
+    }
+
+    pub fn poke() {
+        if let Some(tx) = TX.get() {
+            let _ = tx.send(Ev::Tick);
+        }
     }
     static TX: OnceLock<Sender<Ev>> = OnceLock::new();
     static DOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -248,16 +265,28 @@ mod imp {
         std::thread::Builder::new()
             .name("shiftdrop-gesture".into())
             .spawn(move || {
-                let (mut armed, mut shown, mut warmed, mut origin) = (false, false, false, (0, 0));
+                let (mut armed, mut shown, mut origin) = (false, false, (0, 0));
                 let mut keys = wheel_keys();
+                let reveal = |shown: &mut bool, x: i32, y: i32, k: usize, how: &str| {
+                    if *shown {
+                        return;
+                    }
+                    if show_radial(&app, x, y, false) {
+                        *shown = true;
+                        crate::logx::log(how);
+                        crate::ui::emit(&app, "wheel-mode", serde_json::json!({ "mode": MODES[k].0 }));
+                    }
+                };
                 while let Ok(ev) = rx.recv() {
                     match ev {
                         Ev::Down(x, y) => {
                             origin = (x, y);
                             armed = is_file_source(x, y);
                             shown = false;
-                            warmed = false;
                             keys = wheel_keys();
+                            if armed {
+                                crate::ui::warm(&app);
+                            }
                         }
                         Ev::Move(x, y) if armed && !shown => {
                             let (dx, dy) = (x - origin.0, y - origin.1);
@@ -265,14 +294,15 @@ mod imp {
                                 continue;
                             }
                             if let Some(k) = (0..3).find(|&i| pressed(keys[i])) {
-                                shown = true;
-                                crate::logx::log(format!("gesto: arrastar + {} ({:?} -> {:?})", MODES[k].1, origin, (x, y)));
-                                show_radial(&app, x, y, false);
-                                crate::ui::emit(&app, "wheel-mode", serde_json::json!({ "mode": MODES[k].0 }));
-                            } else if !warmed {
-                                // Arraste começou no Explorer: já prepara a roda (fica escondida).
-                                warmed = true;
-                                let _ = crate::ui::window(&app);
+                                reveal(
+                                    &mut shown,
+                                    x,
+                                    y,
+                                    k,
+                                    &format!("gesto: arrastar + {} ({:?} -> {:?})", MODES[k].1, origin, (x, y)),
+                                );
+                            } else {
+                                crate::ui::warm(&app);
                             }
                         }
                         Ev::Key(vk) if armed => {
@@ -283,11 +313,18 @@ mod imp {
                                 let (x, y) = cursor_pos();
                                 let (dx, dy) = (x - origin.0, y - origin.1);
                                 if dx * dx + dy * dy > THRESHOLD_PX * THRESHOLD_PX {
-                                    shown = true;
-                                    crate::logx::log(format!("gesto: arrastar, depois {}", MODES[k].1));
-                                    show_radial(&app, x, y, false);
-                                    crate::ui::emit(&app, "wheel-mode", serde_json::json!({ "mode": MODES[k].0 }));
+                                    reveal(&mut shown, x, y, k, &format!("gesto: arrastar, depois {}", MODES[k].1));
                                 }
+                            }
+                        }
+                        Ev::Tick if armed && !shown => {
+                            let (x, y) = cursor_pos();
+                            let (dx, dy) = (x - origin.0, y - origin.1);
+                            if dx * dx + dy * dy <= THRESHOLD_PX * THRESHOLD_PX {
+                                continue;
+                            }
+                            if let Some(k) = (0..3).find(|&i| pressed(keys[i])) {
+                                reveal(&mut shown, x, y, k, &format!("gesto: roda pronta + {}", MODES[k].1));
                             }
                         }
                         Ev::Up => {
@@ -295,8 +332,6 @@ mod imp {
                             if shown {
                                 shown = false;
                                 crate::ui::emit(&app, "gesture-end", serde_json::json!(null));
-                            } else if warmed {
-                                crate::ui::schedule_unload(&app);
                             }
                         }
                         _ => {}
@@ -368,6 +403,8 @@ mod imp {
         state().map(|d| d.get_mouse().coords).unwrap_or((400, 400))
     }
 
+    pub fn poke() {}
+
     pub fn spawn(app: AppHandle) {
         std::thread::spawn(move || {
             let Some(dev) = state() else {
@@ -393,10 +430,11 @@ mod imp {
                         if let Some(k) = held {
                             let (dx, dy) = (m.coords.0 - origin.0, m.coords.1 - origin.1);
                             if dx * dx + dy * dy > THRESHOLD * THRESHOLD {
-                                shown = true;
                                 let (x, y) = to_screen(&app, m.coords);
-                                show_radial(&app, x, y, false);
-                                crate::ui::emit(&app, "wheel-mode", serde_json::json!({ "mode": MODES[k] }));
+                                if show_radial(&app, x, y, false) {
+                                    shown = true;
+                                    crate::ui::emit(&app, "wheel-mode", serde_json::json!({ "mode": MODES[k] }));
+                                }
                             }
                         }
                     } else if let Some(k) = tapped {

@@ -115,6 +115,11 @@ fn set_config(app: tauri::AppHandle, cfg: config::Config) -> Result<config::Conf
     if let Some(w) = app.get_webview_window("radial") {
         if !w.is_visible().unwrap_or(false) {
             let _ = w.destroy();
+            let app2 = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                ui::warm(&app2);
+            });
         }
     }
     logx::log(format!("config salva: {c:?}"));
@@ -183,7 +188,10 @@ pub fn run() {
                 let xy = (args.get(2).and_then(|v| v.parse().ok()), args.get(3).and_then(|v| v.parse().ok()));
                 let app = app.clone();
                 std::thread::spawn(move || match xy {
-                    (Some(x), Some(y)) => gesture::show_radial(&app, x, y, false),
+                    (Some(x), Some(y)) => {
+                        let _ = ui::window(&app);
+                        gesture::show_radial(&app, x, y, false);
+                    }
                     _ => gesture::show_at_cursor(&app),
                 });
             } else if args.get(1).map(|a| a == "settings").unwrap_or(false) {
@@ -231,6 +239,9 @@ pub fn run() {
             catcher::init(app.handle());
             tray::build(app)?;
             gesture::spawn(app.handle().clone());
+            // A roda fica pronta antes do primeiro arraste. Criar no meio do gesto
+            // levava vários segundos e o menu abria depois do mouse solto.
+            ui::warm(app.handle());
             let args: Vec<String> = std::env::args().skip(1).collect();
             if !args.iter().any(|a| a == "preview" || a == "selftest-drag") {
                 update::spawn(app.handle().clone());
@@ -257,6 +268,15 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("erro ao iniciar o ShiftDrop");
+        .build(tauri::generate_context!())
+        .expect("erro ao iniciar o ShiftDrop")
+        .run(|_app, event| {
+            // App de bandeja: fechar a última janela (roda, aviso, config) não pode encerrar o processo.
+            // `run` não devolve Result: quando o app termina, o processo sai direto.
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
+                if code.is_none() {
+                    api.prevent_exit();
+                }
+            }
+        });
 }

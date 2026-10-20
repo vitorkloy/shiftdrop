@@ -24,12 +24,12 @@ mod imp {
     use windows::Win32::System::Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Ole::{
-        IDropTarget, IDropTarget_Impl, RegisterDragDrop, ReleaseStgMedium, CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE,
+        IDropTarget, IDropTarget_Impl, OleInitialize, RegisterDragDrop, ReleaseStgMedium, CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE,
     };
     use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
     use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, GetWindowRect, LoadCursorW, RegisterClassW, SetLayeredWindowAttributes, SetWindowPos,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowRect, LoadCursorW, RegisterClassW, SetLayeredWindowAttributes, SetWindowPos,
         ShowWindow, HWND_TOPMOST, IDC_ARROW, LWA_ALPHA, MA_NOACTIVATE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, WM_LBUTTONUP,
         WM_MOUSEACTIVATE, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
     };
@@ -143,11 +143,24 @@ mod imp {
         }
     }
 
-    /// Cria a janela e registra o drop target. Precisa rodar na thread principal (STA/OLE).
+    /// Cria a janela e registra o drop target. Precisa rodar na thread principal (STA + OleInitialize).
+    ///
+    /// `RegisterDragDrop` devolve E_OUTOFMEMORY (0x8007000E) se o thread só tiver
+    /// `CoInitialize` — o caso desde que a roda deixou de existir na abertura.
     pub fn init(app: &AppHandle) {
         let _ = APP.set(app.clone());
+        install();
+    }
+
+    fn install() {
+        if hwnd().is_some() {
+            return;
+        }
         let r: windows::core::Result<HWND> = unsafe {
             (|| {
+                if let Err(e) = OleInitialize(None) {
+                    log(format!("catcher: OleInitialize: {e}"));
+                }
                 let hinst: HINSTANCE = GetModuleHandleW(PCWSTR::null())?.into();
                 let cls = WNDCLASSW {
                     lpfnWndProc: Some(wndproc),
@@ -173,7 +186,10 @@ mod imp {
                 )?;
                 SetLayeredWindowAttributes(h, COLORREF(0), 1, LWA_ALPHA)?;
                 let target: IDropTarget = Target { has_files: Cell::new(false) }.into();
-                RegisterDragDrop(h, &target)?;
+                if let Err(e) = RegisterDragDrop(h, &target) {
+                    let _ = DestroyWindow(h);
+                    return Err(e);
+                }
                 std::mem::forget(target); // vive enquanto o app viver
                 Ok(h)
             })()
@@ -189,6 +205,9 @@ mod imp {
 
     pub fn show(app: &AppHandle, x: i32, y: i32, w: i32, h: i32, scale: f64) {
         let _ = app.run_on_main_thread(move || unsafe {
+            if hwnd().is_none() {
+                install();
+            }
             let Some(hw) = hwnd() else {
                 log("catcher: show sem janela");
                 return;
