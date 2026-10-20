@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>ShiftDrop — Atualização</title>
+<style>
+  :root { color-scheme: light dark; --accent: #ff5500; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 14px; }
+  body { margin: 0; padding: 18px 20px; background: Canvas; color: CanvasText; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
+  #notes { flex: 1; overflow: auto; white-space: pre-wrap; font-size: 13px; line-height: 1.45; opacity: .9; margin: 0 0 14px; }
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  #msg { font-size: 12px; opacity: .8; }
+  button { border: 0; border-radius: 6px; padding: 7px 16px; font: inherit; cursor: pointer; }
+  #go { background: var(--accent); color: white; }
+  #later { background: color-mix(in srgb, CanvasText 12%, Canvas); color: CanvasText; }
+  button:disabled { opacity: .55; cursor: default; }
+</style>
+</head>
+<body>
+<h1 id="title">Atualização</h1>
+<pre id="notes">Procurando…</pre>
+<div class="foot">
+  <span id="msg"></span>
+  <div>
+    <button id="later" type="button">Depois</button>
+    <button id="go" type="button">Atualizar agora</button>
+  </div>
+</div>
+<script>
+  const invoke = window.__TAURI__.core.invoke;
+  const win = window.__TAURI__.window.getCurrentWindow();
+  const $ = (id) => document.getElementById(id);
+  invoke("accent_color").then((c) => c && document.documentElement.style.setProperty("--accent", c)).catch(() => {});
+  $("later").onclick = () => win.close();
+  invoke("pending_update").then((p) => {
+    if (!p) { $("title").textContent = "ShiftDrop"; $("notes").textContent = "Nenhuma atualização no momento."; $("go").disabled = true; return; }
+    $("title").textContent = "Versão " + p.version;
+    $("notes").textContent = p.notes || "Há uma versão nova do ShiftDrop.";
+    $("go").textContent = p.can_install ? "Atualizar agora" : "Abrir no GitHub";
+    $("go").onclick = async () => {
+      $("go").disabled = true;
+      $("msg").textContent = p.can_install ? "Baixando…" : "";
+      try {
+        if (p.can_install) await invoke("install_update");
+        else await invoke("open_release_page");
+      } catch (e) {
+        $("msg").textContent = String(e);
+        $("go").disabled = false;
+      }
+    };
+  });
+</script>
+</body>
+</html>

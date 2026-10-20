@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ShiftDrop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "identifier": "com.vitorkloy.shiftdrop",
   "build": {
     "frontendDist": "../ui"
@@ -23,7 +23,8 @@
         "visible": false,
         "focus": false,
         "shadow": false,
-        "dragDropEnabled": true
+        "dragDropEnabled": true,
+        "create": false
       }
     ],
     "security": {
@@ -60,6 +61,18 @@
           "ffmpeg",
           "imagemagick"
         ]
+      }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDkxMEFBQUIxOTI3MkQ3OTEKUldTUjEzS1NzYW9La2FsWlVMTGh3bVhaNzNnOVdLb3lwUDlKZU1qR0dDYWFTaEZuMmhmVnhncEUK",
+      "endpoints": [
+        "https://github.com/vitorkloy/shiftdrop/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

@@ -14,7 +14,7 @@ Feito com Tauri v2 (Rust + HTML/JS simples). Fica na bandeja do sistema.
 | **Ctrl** | File tools | comprimir, metadados, cortar, juntar… |
 | **Alt** | File actions | copiar, mover, copiar caminho, terminal (vale para pastas também) |
 
-A roda fica aberta até você soltar. Dá para trocar de roda no meio do arraste tocando outra tecla. Soltar no centro cancela. Tamanho: `SHIFTDROP_SCALE` (padrão `0.75`; `1` = tamanho do Tangerine). Para trocar as teclas, use `SHIFTDROP_KEYS=convert,tools,actions` (ex. `ctrl,shift,alt`).
+A roda fica aberta até você soltar. Dá para trocar de roda no meio do arraste tocando outra tecla. Soltar no centro cancela. Tamanho, teclas e "iniciar com o sistema" ficam em **Configurações** (ícone da bandeja) e são gravados em `config.json`. Variáveis de ambiente ainda ganham: `SHIFTDROP_SCALE` (padrão `0.75`; `1` = tamanho do Tangerine) e `SHIFTDROP_KEYS=convert,tools,actions` (ex. `ctrl,shift,alt`).
 
 Forma e layout seguem o Tangerine; o acabamento é Windows 11: tema claro/escuro do sistema, cor de acento do Windows no setor ativo (fallback laranja `#ff5200`), Segoe UI Variable, ícones Segoe Fluent Icons. Sem acrylic do DWM (ele ignora o recorte circular e pintava um quadrado atrás da roda); rótulos em CAPS, pílula branca no centro com a opção sob o cursor e entrada "bloom" de 200 ms. O número de setores varia por tipo: 2 viram semicírculos e 1 vira um anel inteiro. Sem botões magnéticos e sem cursor customizado.
 
@@ -59,6 +59,17 @@ shiftdrop.exe preview foto.jpg --mode tools --hover 0   # mostra a roda (captura
 shiftdrop.exe selftest-drag foto.jpg --drop  # simula um drag OLE no próprio processo
 ```
 
+## Atualizações
+
+Na primeira abertura o app pergunta se deve avisar quando sair versão nova. A preferência fica em Configurações. A checagem lê `https://github.com/vitorkloy/shiftdrop/releases/latest/download/latest.json` alguns segundos depois de abrir e de novo a cada 6 horas. Se houver versão maior, o item **Atualizar para x.y.z…** aparece na bandeja; com o aviso ligado, também vai uma notificação. Só baixa e instala depois de **Atualizar agora** (Windows: instalador passivo; macOS: `.app`; Linux AppImage: troca o próprio arquivo). Quem instalou o `.deb` vê o aviso e abre a página do release.
+
+Para o CI assinar o `latest.json`, o repositório precisa dos secrets `TAURI_SIGNING_PRIVATE_KEY` (conteúdo de `~/.tauri/shiftdrop.key`) e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (vazio se a chave não tiver senha). Build local com instalador:
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY = "$env:USERPROFILE\.tauri\shiftdrop.key"
+npm run build
+```
+
 ## Desenvolvimento
 
 Requisitos: Rust (MSVC), Node 18+, WebView2.
@@ -72,7 +83,7 @@ npm run build      # instalador NSIS em src-tauri/target/release/bundle/nsis
 
 ## Como funciona
 
-Uma thread consulta o botão esquerdo e Shift/Ctrl/Alt (`GetAsyncKeyState`) a cada 15 ms. Se o arraste começou no Explorer e uma das teclas foi pressionada, a roda aparece no cursor. Tocar outra tecla troca a roda (evento `wheel-mode`). Sem hook de baixo nível e sem DLL injetada.
+No Windows, hooks de baixo nível (`WH_MOUSE_LL` e `WH_KEYBOARD_LL`) numa thread com loop de mensagens: ocioso, não há polling. Se o arraste começou no Explorer e uma das teclas foi pressionada, a roda aparece no cursor. Tocar outra tecla troca a roda (evento `wheel-mode`). O WebView da roda só existe enquanto ela é usada e some alguns segundos depois de esconder. No macOS e no Linux a leitura continua por `device_query` (15 ms com o botão pressionado, 120 ms ocioso).
 
 O drop é recebido por uma janela nativa própria (`ShiftDropCatcher`, circular, por cima da roda) com um `IDropTarget` que lê o caminho (`CF_HDROP`) já no **DragEnter**, então os setores certos aparecem antes de soltar. Ao abrir, a roda sempre desenha setores genéricos e troca pelos do tipo assim que o arquivo é identificado.
 
@@ -80,11 +91,11 @@ Log em `%LOCALAPPDATA%\ShiftDrop\log.txt` (gesto, tecla, roda, DragEnter/Drop co
 
 ## Plataformas (v0.2.0)
 
-Os builds saem do GitHub Actions (`.github/workflows/release.yml`, `tauri-apps/tauri-action`) em tag `v*` ou manualmente (workflow_dispatch), como **release rascunho**:
+Os builds saem do GitHub Actions (`.github/workflows/release.yml`, `tauri-apps/tauri-action`) em tag `v*` ou manualmente (workflow_dispatch), como **release publicado** (o updater precisa do `latest.json` público):
 
 | Plataforma | Pacote | Gesto | Limitações |
 |---|---|---|---|
-| Windows 10/11 | NSIS `.exe` (WebView2 bootstrapper embutido) | Hook de estado (GetAsyncKeyState) + drop target OLE nativo (CF_HDROP) + recorte `SetWindowRgn` | Vidro é CSS (sem Mica/acrylic do DWM), então o visual é igual no Win10 e no Win11. |
+| Windows 10/11 | NSIS `.exe` (WebView2 bootstrapper embutido) | Hooks WH_MOUSE_LL / WH_KEYBOARD_LL + drop target OLE nativo (CF_HDROP) + recorte `SetWindowRgn` | Vidro é CSS (sem Mica/acrylic do DWM), então o visual é igual no Win10 e no Win11. |
 | macOS 11+ | `.dmg` universal (Apple Silicon + Intel) | Leitura global de mouse/modificadores via CoreGraphics (`device_query`); drop pelo drag-drop do Tauri numa janela transparente | Peça permissão em *Ajustes > Privacidade > Monitoramento de Entrada/Acessibilidade*. App não assinado/notarizado: abra com botão direito > Abrir. Ctrl ou ⌘ = File tools, Option = File actions. Sem cor de destaque do sistema (usa laranja). |
 | Linux | `.deb` e `.AppImage` (webkit2gtk-4.1) | X11/XWayland via `device_query` (`DISPLAY`); drop pelo drag-drop GTK do Tauri | **Wayland puro**: sem leitura global de teclado/mouse, use o item da bandeja "Abrir menu aqui" e arraste o arquivo para a roda. Recorte circular depende do compositor (transparência). |
 

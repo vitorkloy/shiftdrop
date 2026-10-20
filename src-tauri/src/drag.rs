@@ -6,7 +6,7 @@ use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, DragDropEvent, Emitter};
+use tauri::{AppHandle, DragDropEvent};
 
 struct Last {
     sig: String,
@@ -43,7 +43,8 @@ pub fn dispatch(app: &AppHandle, source: &str, kind: &str, paths: Vec<PathBuf>, 
     if kind != "over" {
         log(format!("drag[{source}] {kind} arquivos={:?} pos={:?}", s(&paths), pos));
     }
-    let _ = app.emit(
+    crate::ui::emit(
+        app,
         "sd-drag",
         json!({
             "type": kind,

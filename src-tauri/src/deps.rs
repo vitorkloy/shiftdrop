@@ -12,7 +12,7 @@ use std::cell::Cell;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static LOCK: Mutex<()> = Mutex::new(());
@@ -80,7 +80,7 @@ pub fn planned(name: &str) -> Option<PathBuf> {
 fn progress(tool: &str, done: u64, total: u64, phase: &str) {
     if let Some(a) = APP.get() {
         let pct = if total > 0 { (done * 100 / total) as u32 } else { 0 };
-        let _ = a.emit("dep-progress", serde_json::json!({ "tool": tool, "pct": pct, "phase": phase, "done": done, "total": total }));
+        crate::ui::emit(a, "dep-progress", serde_json::json!({ "tool": tool, "pct": pct, "phase": phase, "done": done, "total": total }));
     }
 }
 
@@ -204,6 +204,7 @@ fn install(name: &str, target: &Path) -> Result<(), String> {
                         }
                     }
                 }
+                prune_libreoffice(&dir);
                 Ok(())
             }
             "ffmpeg" | "ffprobe" => {
@@ -265,5 +266,77 @@ pub fn ensure(program: &Path) {
         if let Err(e) = install(stem, &target) {
             crate::logx::log(format!("deps: falha ao instalar {stem}: {e}"));
         }
+    }
+}
+
+/// Enxuga o LibreOffice extraído para uso headless (conversão): tira dicionários,
+/// ajuda, galeria, modelos, Python/Java, idiomas de interface e temas de ícones.
+pub fn prune_libreoffice(dir: &Path) {
+    let before = dir_size(dir);
+    let keep_lang = |n: &str| n.eq_ignore_ascii_case("en-US") || n.eq_ignore_ascii_case("pt-BR");
+    let rm = |p: PathBuf| {
+        if p.is_dir() {
+            let _ = std::fs::remove_dir_all(&p);
+        } else {
+            let _ = std::fs::remove_file(&p);
+        }
+    };
+    for sub in [
+        "help", "readmes", "lo.msi", "share/extensions", "share/gallery", "share/template", "share/wizards", "share/autotext",
+        "share/autocorr", "share/wordbook", "share/Scripts", "share/basic", "program/wizards", "program/classes", "program/opencl",
+        "program/shlxthdl", "program/__pycache__",
+    ] {
+        rm(dir.join(sub));
+    }
+    // msiexec /a copia o .msi para a raiz.
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if e.path().extension().map(|x| x.eq_ignore_ascii_case("msi")).unwrap_or(false) {
+            rm(e.path());
+        }
+    }
+    for e in std::fs::read_dir(dir.join("program")).into_iter().flatten().flatten() {
+        let n = e.file_name().to_string_lossy().to_string();
+        if n.starts_with("python-core") || n.starts_with("python") && n.ends_with(".exe") {
+            rm(e.path());
+        }
+    }
+    for e in std::fs::read_dir(dir.join("program/resource")).into_iter().flatten().flatten() {
+        if !keep_lang(&e.file_name().to_string_lossy()) {
+            rm(e.path());
+        }
+    }
+    for e in std::fs::read_dir(dir.join("share/registry/res")).into_iter().flatten().flatten() {
+        let n = e.file_name().to_string_lossy().to_string();
+        if n.starts_with("registry_") && !(n.contains("en-US") || n.contains("pt-BR")) {
+            rm(e.path());
+        }
+    }
+    for e in std::fs::read_dir(dir.join("share/config")).into_iter().flatten().flatten() {
+        let n = e.file_name().to_string_lossy().to_string();
+        if n.starts_with("images_") && n != "images_colibre.zip" {
+            rm(e.path());
+        }
+    }
+    let _ = std::fs::write(dir.join(".shiftdrop-pruned"), "");
+    crate::logx::log(format!("deps: LibreOffice enxugado {} MB → {} MB", before >> 20, dir_size(dir) >> 20));
+}
+
+fn dir_size(d: &Path) -> u64 {
+    std::fs::read_dir(d)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| {
+            let p = e.path();
+            if p.is_dir() { dir_size(&p) } else { e.metadata().map(|m| m.len()).unwrap_or(0) }
+        })
+        .sum()
+}
+
+/// Instalações antigas (v0.3.0) ainda não enxugadas: enxuga em segundo plano.
+pub fn prune_old() {
+    let dir = data_root().join("LibreOffice");
+    if dir.join("program").is_dir() && !dir.join(".shiftdrop-pruned").exists() {
+        std::thread::spawn(move || prune_libreoffice(&dir));
     }
 }

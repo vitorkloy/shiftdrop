@@ -1,4 +1,4 @@
-//! Alvo de drop nativo do ShiftDrop.
+﻿//! Alvo de drop nativo do ShiftDrop.
 //!
 //! Uma janela Win32 própria (popup em camadas, alpha 1/255: invisível mas
 //! "acertável" pelo mouse), recortada no mesmo círculo do menu e posta por cima
@@ -17,7 +17,7 @@ mod imp {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
     use std::sync::OnceLock;
-    use tauri::{AppHandle, Emitter};
+    use tauri::AppHandle;
     use windows::core::{implement, w, Ref, PCWSTR};
     use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINTL, RECT, WPARAM};
     use windows::Win32::Graphics::Gdi::{CreateEllipticRgn, SetWindowRgn};
@@ -134,7 +134,7 @@ mod imp {
                 let cr = CENTER_R.load(Ordering::Relaxed) as i32;
                 if d2 < cr * cr {
                     if let Some(app) = APP.get() {
-                        let _ = app.emit("sd-cancel", ());
+                        crate::ui::emit(app, "sd-cancel", serde_json::json!(null));
                     }
                 }
                 LRESULT(0)

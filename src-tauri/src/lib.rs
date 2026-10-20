@@ -6,6 +6,9 @@ pub mod tools;
 pub mod wheels;
 pub mod fileactions;
 pub mod deps;
+pub mod config;
+mod ui;
+mod update;
 
 mod catcher;
 mod drag;
@@ -79,6 +82,81 @@ fn js_log(level: String, msg: String) {
 }
 
 #[tauri::command]
+fn ui_ready(app: tauri::AppHandle) {
+    ui::ready(&app);
+}
+
+#[tauri::command]
+fn get_config(app: tauri::AppHandle) -> config::Config {
+    use tauri_plugin_autostart::ManagerExt;
+    let mut c = config::get();
+    c.autostart = app.autolaunch().is_enabled().unwrap_or(c.autostart);
+    c
+}
+
+#[tauri::command]
+fn set_config(app: tauri::AppHandle, cfg: config::Config) -> Result<config::Config, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let c = config::save(cfg)?;
+    let al = app.autolaunch();
+    let r = if c.autostart { al.enable() } else { al.disable() };
+    if let Err(e) = r {
+        logx::log(format!("autostart: {e}"));
+    }
+    if c.notify_updates == Some(true) {
+        #[cfg(target_os = "macos")]
+        {
+            use tauri_plugin_notification::NotificationExt;
+            let _ = app.notification().request_permission();
+        }
+        update::after_notify_choice(&app);
+    }
+    // A roda é recriada com o novo tamanho no próximo uso.
+    if let Some(w) = app.get_webview_window("radial") {
+        if !w.is_visible().unwrap_or(false) {
+            let _ = w.destroy();
+        }
+    }
+    logx::log(format!("config salva: {c:?}"));
+    Ok(c)
+}
+
+#[tauri::command]
+fn set_notify_updates(app: tauri::AppHandle, enabled: bool) -> Result<config::Config, String> {
+    let mut c = config::get();
+    c.notify_updates = Some(enabled);
+    let c = config::save(c)?;
+    if enabled {
+        #[cfg(target_os = "macos")]
+        {
+            use tauri_plugin_notification::NotificationExt;
+            let _ = app.notification().request_permission();
+        }
+    }
+    if let Some(w) = app.get_webview_window("notify") {
+        let _ = w.close();
+    }
+    update::after_notify_choice(&app);
+    logx::log(format!("notify_updates={enabled}"));
+    Ok(c)
+}
+
+#[tauri::command]
+fn pending_update() -> Option<update::Pending> {
+    update::pending()
+}
+
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    update::install(app).await
+}
+
+#[tauri::command]
+fn open_release_page() {
+    update::open_releases();
+}
+
+#[tauri::command]
 fn hide_radial(app: tauri::AppHandle) {
     gesture::hide_radial(&app);
 }
@@ -103,12 +181,18 @@ pub fn run() {
             // `shiftdrop.exe debug-show [x y]`: abre o menu como o gesto (sem arquivo) na instância que já roda.
             if args.get(1).map(|a| a == "debug-show").unwrap_or(false) {
                 let xy = (args.get(2).and_then(|v| v.parse().ok()), args.get(3).and_then(|v| v.parse().ok()));
-                match xy {
-                    (Some(x), Some(y)) => gesture::show_radial(app, x, y, false),
-                    _ => gesture::show_at_cursor(app),
-                }
+                let app = app.clone();
+                std::thread::spawn(move || match xy {
+                    (Some(x), Some(y)) => gesture::show_radial(&app, x, y, false),
+                    _ => gesture::show_at_cursor(&app),
+                });
+            } else if args.get(1).map(|a| a == "settings").unwrap_or(false) {
+                ui::open_settings(app);
             }
         }))
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::DragDrop(e) = event {
                 drag::forward(window.app_handle(), window.label(), e);
@@ -119,7 +203,10 @@ pub fn run() {
                 drag::forward(webview.app_handle(), webview.label(), e);
             }
         })
-        .invoke_handler(tauri::generate_handler![js_log, accent_color, wheels, list_actions, generic_actions, run_action, hide_radial, thumbnail])
+        .invoke_handler(tauri::generate_handler![
+            js_log, ui_ready, get_config, set_config, set_notify_updates, pending_update, install_update, open_release_page,
+            accent_color, wheels, list_actions, generic_actions, run_action, hide_radial, thumbnail
+        ])
         .setup(|app| {
             logx::log(format!(
                 "==== ShiftDrop {} iniciado: exe={:?} pid={} args={:?}",
@@ -129,16 +216,25 @@ pub fn run() {
                 std::env::args().collect::<Vec<_>>()
             ));
             logx::log(format!("ferramentas: {:?}", tools::Tools::detect()));
-            if let Some(w) = app.get_webview_window("radial") {
-                let px = gesture::wheel_px();
-                let _ = w.set_size(tauri::LogicalSize::new(px, px));
-                logx::log(format!("roda: escala {} → janela {px}x{px} px lógicos", gesture::ui_scale()));
+            logx::log(format!("roda: escala {} (criada sob demanda)", gesture::ui_scale()));
+            // 1ª execução: liga "iniciar com o sistema" conforme a config.
+            if !config::path().is_file() {
+                use tauri_plugin_autostart::ManagerExt;
+                let c = config::get();
+                if c.autostart {
+                    let _ = app.autolaunch().enable();
+                }
+                let _ = config::save(c);
             }
             deps::init(app.handle());
+            deps::prune_old();
             catcher::init(app.handle());
             tray::build(app)?;
             gesture::spawn(app.handle().clone());
             let args: Vec<String> = std::env::args().skip(1).collect();
+            if !args.iter().any(|a| a == "preview" || a == "selftest-drag") {
+                update::spawn(app.handle().clone());
+            }
             if args.first().map(|a| a == "preview").unwrap_or(false) {
                 let mut hover = -1;
                 let mut mode = String::from("convert");
@@ -154,6 +250,8 @@ pub fn run() {
                     }
                 }
                 gesture::preview(app.handle(), paths, hover, mode);
+            } else if args.first().map(|a| a == "settings").unwrap_or(false) {
+                ui::open_settings(app.handle());
             } else if args.first().map(|a| a == "selftest-drag").unwrap_or(false) && args.len() >= 2 {
                 selftest::start(app.handle(), args[1].clone(), args.iter().any(|a| a == "--drop"));
             }

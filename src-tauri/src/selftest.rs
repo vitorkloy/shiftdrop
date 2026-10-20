@@ -31,7 +31,14 @@ pub fn start(app: &AppHandle, file: String, do_drop: bool) {
             .map(|m| (m.position().x + m.size().width as i32 / 2, m.position().y + m.size().height as i32 / 2))
             .unwrap_or((800, 450));
         crate::gesture::show_radial(&app, x, y, false);
-        std::thread::sleep(Duration::from_millis(500));
+        // A roda é criada sob demanda: espera a página carregar.
+        for _ in 0..100 {
+            if crate::ui::is_ready() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        std::thread::sleep(Duration::from_millis(300));
 
         // Ponto alvo: 95 px (lógicos) acima do centro do overlay = setor do topo.
         let (px, py) = app

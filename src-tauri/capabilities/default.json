@@ -3,9 +3,14 @@
   "identifier": "default",
   "description": "Permissões da janela do menu radial",
   "windows": [
-    "radial"
+    "radial",
+    "settings",
+    "notify",
+    "update"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "updater:default",
+    "notification:default"
   ]
 }

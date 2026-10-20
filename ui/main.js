@@ -4,6 +4,9 @@
 // Sem botões magnéticos nem cursor customizado: só o setor sob o cursor fica laranja.
 const T = window.__TAURI__;
 const invoke = T.core.invoke;
+// Listeners registrados antes de avisar o Rust (eventos da fila só vão depois).
+const LISTENERS = [];
+const listen = (n, f) => LISTENERS.push(T.event.listen(n, f));
 
 // Console do JS → %LOCALAPPDATA%\ShiftDrop\log.txt
 const jsLog = (level, args) => {
@@ -265,7 +268,7 @@ async function onDrop(p, idx) {
 }
 
 // Eventos de arrastar vêm do Rust (catcher.rs/drag.rs), já com os caminhos no "enter".
-T.event.listen("sd-drag", async (ev) => {
+listen("sd-drag", async (ev) => {
   const p = ev.payload;
   if (busy) return;
   if (p.type === "enter") {
@@ -280,7 +283,7 @@ T.event.listen("sd-drag", async (ev) => {
   }
 });
 
-T.event.listen("radial-show", (e) => {
+listen("radial-show", (e) => {
   clearTimeout(hideTimer);
   const manual = !!(e.payload && e.payload.manual);
   console.log(`radial-show manual=${manual}`);
@@ -295,7 +298,7 @@ T.event.listen("radial-show", (e) => {
 });
 
 // Shift / Ctrl / Alt durante o arraste trocam a roda (vem do gesture.rs).
-T.event.listen("wheel-mode", (e) => {
+listen("wheel-mode", (e) => {
   const m = e.payload && e.payload.mode;
   if (!m || busy || m === mode) return;
   console.log(`menu: roda → ${m} (${MODE_NAME[m]})`);
@@ -303,16 +306,16 @@ T.event.listen("wheel-mode", (e) => {
 });
 
 // Modo demonstração (shiftdrop.exe preview <arquivo> --mode tools --hover N).
-T.event.listen("radial-preview", async (e) => {
+listen("radial-preview", async (e) => {
   const m = e.payload.mode || "convert";
   mode = m;
   await load(e.payload.paths || []);
   setHover(e.payload.hover);
 });
 
-T.event.listen("sd-cancel", () => { if (!busy) hide(); });
+listen("sd-cancel", () => { if (!busy) hide(); });
 
-T.event.listen("gesture-end", () => {
+listen("gesture-end", () => {
   setTimeout(() => { if (!dropped && !busy) hide(); }, 600);
 });
 
@@ -323,10 +326,12 @@ render();
 console.log(`main.js carregado (roda ${PX}px)`);
 
 // Download sob demanda de uma ferramenta (ex. LibreOffice no 1º uso).
-T.event.listen("dep-progress", (e) => {
+listen("dep-progress", (e) => {
   if (!busy) return;
   const { tool, pct, phase } = e.payload || {};
   if (phase === "download") setPill(`BAIXANDO ${String(tool).toUpperCase()} ${pct}%`, "msg");
   else if (phase === "install") setPill(`INSTALANDO ${String(tool).toUpperCase()}`, "msg");
   else if (phase === "done") { pill.className = ""; pill.innerHTML = '<div class="spin"></div>'; }
 });
+
+Promise.all(LISTENERS).then(() => invoke("ui_ready"));
