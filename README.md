@@ -114,7 +114,7 @@ O que faltar aparece desabilitado na roda com o motivo ("Requer …").
 
 | Plataforma | Embutido no instalador | Baixado no 1º uso (pasta de dados do app) |
 |---|---|---|
-| Windows | ffmpeg + ffprobe, ImageMagick portable, pandoc, Ghostscript (`<pasta do app>\tools`) | LibreOffice: MSI oficial extraído sem admin em `%LOCALAPPDATA%\ShiftDrop\tools\LibreOffice` |
+| Windows | ffmpeg + ffprobe (com as DLLs do build), ImageMagick portable + `VCOMP140.DLL`, pandoc, Ghostscript (`<pasta do app>\tools`) | LibreOffice: MSI oficial extraído sem admin em `%LOCALAPPDATA%\ShiftDrop\tools\LibreOffice` |
 | macOS | — | ffmpeg/ffprobe (evermeet.cx), pandoc (GitHub), em `~/Library/Application Support/ShiftDrop/tools` |
 | Linux | — | ffmpeg/ffprobe estáticos (johnvansickle.com, x86_64), pandoc, em `~/.local/share/shiftdrop/tools` |
 
@@ -133,5 +133,6 @@ O ShiftDrop é MIT. As ferramentas são programas independentes, distribuídos j
 - **pandoc**: GPLv2+, https://github.com/jgm/pandoc.
 - **Ghostscript**: AGPLv3, https://ghostscript.com (código em https://github.com/ArtifexSoftware/ghostpdl).
 - **LibreOffice** (baixado, não redistribuído): MPL-2.0, https://www.libreoffice.org/about-us/licenses.
+- **Visual C++ 2015–2022** (`vcomp140.dll` e o restante que o binário importa): runtime redistribuível da Microsoft, cópia local ao lado do executável. Origem: o `vc_redist.x64.exe` oficial.
 
 Os textos de licença ficam em `tools\LICENSE-*.txt` quando o pacote original os inclui.

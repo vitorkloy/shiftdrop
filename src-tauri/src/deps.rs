@@ -36,6 +36,7 @@ pub fn bundled_roots() -> Vec<PathBuf> {
     let mut v = Vec::new();
     if let Some(d) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
         v.push(d.join("tools"));
+        v.push(d.join("resources").join("tools"));
         v.push(d.join("../Resources/tools"));
         v.push(d.join("../lib/ShiftDrop/tools"));
         v.push(d.join("../lib/shiftdrop/tools"));

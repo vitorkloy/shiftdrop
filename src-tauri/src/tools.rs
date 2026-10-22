@@ -159,9 +159,67 @@ fn soffice_fallbacks() -> Vec<PathBuf> {
 }
 
 /// Cria um Command que não abre janela de console no Windows.
+/// O PATH do processo filho começa pelas pastas embutidas, para achar DLLs e
+/// delegados (ffmpeg, Ghostscript) ao lado do executável, não um binário quebrado do sistema.
 pub fn command(program: &Path) -> Command {
     crate::deps::ensure(program);
-    raw_command(program)
+    let mut c = raw_command(program);
+    prepare_tool(&mut c, program);
+    c
+}
+
+fn push_path(path: &mut OsString, dir: &Path) {
+    if path.len() > 0 {
+        path.push(if cfg!(windows) { ";" } else { ":" });
+    }
+    path.push(dir);
+}
+
+fn prepare_tool(c: &mut Command, program: &Path) {
+    let Some(dir) = program.parent() else { return };
+    let mut path = OsString::new();
+    let mut seen = Vec::new();
+    let mut add = |d: &Path, path: &mut OsString, seen: &mut Vec<PathBuf>| {
+        if d.is_dir() && !seen.iter().any(|s| s == d) {
+            seen.push(d.to_path_buf());
+            push_path(path, d);
+        }
+    };
+    add(dir, &mut path, &mut seen);
+    for root in crate::deps::bundled_roots() {
+        add(&root, &mut path, &mut seen);
+        if let Ok(rd) = std::fs::read_dir(&root) {
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    add(&p, &mut path, &mut seen);
+                    add(&p.join("bin"), &mut path, &mut seen);
+                }
+            }
+        }
+    }
+    if let Some(old) = std::env::var_os("PATH") {
+        if !path.is_empty() {
+            path.push(if cfg!(windows) { ";" } else { ":" });
+        }
+        path.push(old);
+    }
+    c.env("PATH", path);
+
+    let name = program.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    if name.eq_ignore_ascii_case("magick") {
+        c.env("MAGICK_HOME", dir);
+        c.env("MAGICK_CONFIGURE_PATH", dir);
+        c.env("MAGICK_CODER_MODULE_PATH", dir);
+    }
+    if name.eq_ignore_ascii_case("gswin64c") || name.eq_ignore_ascii_case("gswin32c") || name.eq_ignore_ascii_case("gs") {
+        let beside = dir.join("lib");
+        let parent = dir.parent().map(|p| p.join("lib")).filter(|p| p.is_dir());
+        let lib = if beside.is_dir() { Some(beside) } else { parent };
+        if let Some(lib) = lib {
+            c.env("GS_LIB", lib);
+        }
+    }
 }
 
 /// Como `command`, sem disparar download.
