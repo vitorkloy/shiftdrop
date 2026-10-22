@@ -1,6 +1,6 @@
 [package]
 name = "shiftdrop"
-version = "0.4.6"
+version = "0.4.7"
 edition = "2021"
 description = "Shift + arrastar um arquivo para converter localmente (Windows, macOS, Linux)"
 authors = ["Vitor de Oliveira"]
