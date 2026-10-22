@@ -11,7 +11,7 @@ use tauri_plugin_updater::UpdaterExt;
 
 const RELEASES: &str = "https://github.com/vitorkloy/shiftdrop/releases/latest";
 const FIRST_WAIT: Duration = Duration::from_secs(8);
-const INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+const INTERVAL: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Pending {
@@ -77,7 +77,9 @@ async fn check(app: &AppHandle) -> Result<(), String> {
             *PENDING.lock().unwrap() = None;
             refresh_tray(app);
         }
-        Err(e) => crate::logx::log(format!("update: checagem falhou: {e}")),
+        Err(e) => crate::logx::log(format!(
+            "update: checagem falhou: {e}. Se o latest.json não tiver a plataforma windows-x86_64, o Windows não avisa."
+        )),
     }
     Ok(())
 }
@@ -98,12 +100,17 @@ fn maybe_toast(app: &AppHandle, info: &Pending) {
         }
         *t = Some(info.version.clone());
     }
-    let _ = app
+    let shown = app
         .notification()
         .builder()
         .title("Nova versão do ShiftDrop")
         .body(format!("A versão {} está disponível.", info.version))
         .show();
+    if let Err(e) = shown {
+        crate::logx::log(format!("update: toast não exibido: {e}"));
+    }
+    // O toast do Windows some se o app não tem atalho registrado. A janela é o aviso visível.
+    crate::ui::open_update(app);
 }
 
 /// Depois da primeira pergunta: se já houver versão nova e o aviso estiver ligado, tosta.
