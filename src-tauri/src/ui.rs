@@ -157,7 +157,7 @@ pub fn open_settings(app: &AppHandle) {
     std::thread::spawn(move || {
         let _ = tauri::WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App("settings.html".into()))
             .title("ShiftDrop — Configurações")
-            .inner_size(380.0, 400.0)
+            .inner_size(380.0, 448.0)
             .resizable(false)
             .maximizable(false)
             .minimizable(false)
