@@ -189,6 +189,8 @@ function Repair-ToolDir([string]$dir) {
     foreach ($imp in [SdPe]::Imports($b.FullName)) {
       if (Test-Path (Join-Path $dir $imp)) { continue }
       $low = $imp.ToLowerInvariant()
+      # API sets (api-ms-win-*, ext-ms-*) não existem como arquivo. O loader do Windows resolve.
+      if ($low.StartsWith('api-ms-') -or $low.StartsWith('ext-ms-')) { continue }
       if ($vcNames -contains $low) { [void]$need.Add($low); continue }
       $sys = Join-Path "$env:SystemRoot\System32" $imp
       if (Test-Path $sys) { continue }
