@@ -153,6 +153,11 @@ fn pending_update() -> Option<update::Pending> {
 }
 
 #[tauri::command]
+fn app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+#[tauri::command]
 async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     update::install(app).await
 }
@@ -213,7 +218,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            js_log, ui_ready, get_config, set_config, set_notify_updates, pending_update, install_update, open_release_page,
+            js_log, ui_ready, get_config, set_config, set_notify_updates, pending_update, install_update, open_release_page, app_version,
             accent_color, wheels, list_actions, generic_actions, run_action, hide_radial, thumbnail
         ])
         .setup(|app| {
