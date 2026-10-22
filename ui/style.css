@@ -1,37 +1,10 @@
 /* ShiftDrop — forma da roda do Tangerine, acabamento Windows 11.
-   Segue o tema claro/escuro do sistema e a cor de acento (fallback laranja).
+   Tema claro/escuro do sistema; cores da logo (brand.css).
    Sem botões magnéticos e sem cursor customizado. */
+@import "brand.css";
 :root {
-  --accent: #ff5200;
   --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --icons: "Segoe Fluent Icons", "Segoe MDL2 Assets";
-  /* Claro (Mica/Acrylic claro do Win11) */
-  --disc: rgba(243, 243, 243, .96);
-  --disc-stroke: rgba(0, 0, 0, .10);
-  --hub-ring: rgba(0, 0, 0, .035);
-  --hub: #ffffff;
-  --petal: #fbfbfb;
-  --petal-stroke: rgba(0, 0, 0, .075);
-  --text: #1b1b1b;
-  --text-off: rgba(0, 0, 0, .36);
-  --pill: #ffffff;
-  --pill-stroke: rgba(0, 0, 0, .07);
-  --card: #f9f9f9;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --disc: rgba(32, 32, 32, .97);
-    --disc-stroke: rgba(255, 255, 255, .09);
-    --hub-ring: rgba(255, 255, 255, .03);
-    --hub: #2b2b2b;
-    --petal: #2d2d2d;
-    --petal-stroke: rgba(255, 255, 255, .07);
-    --text: #ffffff;
-    --text-off: rgba(255, 255, 255, .36);
-    --pill: #383838;
-    --pill-stroke: rgba(255, 255, 255, .08);
-    --card: #2b2b2b;
-  }
 }
 html, body {
   margin: 0; width: 100%; height: 100%;
@@ -51,12 +24,12 @@ html, body {
 .hub { fill: var(--hub); stroke: var(--petal-stroke); stroke-width: .75; }
 
 .petal { fill: var(--petal); stroke: var(--petal-stroke); stroke-width: .75; transition: fill .083s linear; }
-.target.hi .petal { fill: var(--accent); stroke: transparent; }
+.target.hi .petal { fill: url(#brand-core); stroke: transparent; }
 .target.off .wheel-label, .target.off .icon { fill: var(--text-off); }
 .target.off.hi .petal { fill: var(--text-off); }
 
 .wheel-label { fill: var(--text); font: 600 13.5px var(--font); letter-spacing: .3px; pointer-events: none; }
-.target.hi .wheel-label, .target.hi .icon { fill: #fff; }
+.target.hi .wheel-label, .target.hi .icon { fill: var(--icon); }
 .tool .wheel-label { font-size: 8.5px; letter-spacing: .2px; }
 .icon { fill: var(--text); font: 15px var(--icons); pointer-events: none; }
 
@@ -76,7 +49,7 @@ html, body {
 #pill.ok { color: #0f7b0f; }
 @media (prefers-color-scheme: dark) { #pill.err { color: #ff99a4; } #pill.ok { color: #6ccb5f; } }
 #pill:empty { display: none; }
-#pill .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--pill-stroke); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+#pill .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--pill-stroke); border-top-color: var(--highlight); animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 #empty {
@@ -84,4 +57,8 @@ html, body {
   width: 200px; box-sizing: border-box; padding: 16px;
   border-radius: 8px; background: var(--card); border: 1px solid var(--pill-stroke);
   color: var(--text); opacity: .85; font: 400 12.5px/1.55 var(--font); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
 }
+#empty[hidden] { display: none; }
+#empty .empty-logo { width: 48px; height: 48px; border-radius: 10px; }
+#empty p { margin: 0; }

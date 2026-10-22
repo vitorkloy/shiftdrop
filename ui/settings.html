@@ -3,22 +3,25 @@
 <head>
 <meta charset="utf-8" />
 <title>ShiftDrop — Configurações</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="brand.css" />
 <style>
-  :root { color-scheme: light dark; --accent: #ff5500; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 14px; }
-  body { margin: 0; padding: 18px 20px; background: Canvas; color: CanvasText; }
-  h1 { font-size: 18px; font-weight: 600; margin: 0 0 14px; }
+  body { margin: 0; padding: 18px 20px; background: var(--surface); color: var(--text); font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+  .brand img { width: 36px; height: 36px; border-radius: 8px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; }
   .row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; gap: 12px; }
   select, input[type=range] { accent-color: var(--accent); }
-  select { min-width: 110px; padding: 4px 6px; border-radius: 6px; }
+  select { min-width: 110px; padding: 4px 6px; border-radius: 6px; background: var(--surface); color: var(--text); border: 1px solid var(--surface-2); }
   .val { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
   .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
-  button { background: var(--accent); color: white; border: 0; border-radius: 6px; padding: 7px 18px; font: inherit; cursor: pointer; }
+  button { background: var(--accent); color: var(--icon); border: 0; border-radius: 6px; padding: 7px 18px; font: inherit; cursor: pointer; }
   #msg { font-size: 12px; opacity: .8; }
-  hr { border: 0; border-top: 1px solid color-mix(in srgb, CanvasText 15%, transparent); margin: 12px 0; }
+  hr { border: 0; border-top: 1px solid var(--surface-2); margin: 12px 0; }
 </style>
 </head>
 <body>
-<h1>ShiftDrop</h1>
+<div class="brand"><img src="logo.svg" alt="" width="36" height="36" /><h1>ShiftDrop</h1></div>
 <div class="row"><label for="k0">Converter formatos</label><select id="k0"></select></div>
 <div class="row"><label for="k1">Ferramentas</label><select id="k1"></select></div>
 <div class="row"><label for="k2">Ações de arquivo</label><select id="k2"></select></div>
@@ -40,7 +43,6 @@
     c.keys.forEach((k, i) => ($("k" + i).value = k));
     $("scale").value = c.scale; $("auto").checked = c.autostart; $("upd").checked = !!c.notify_updates; pct();
   });
-  invoke("accent_color").then((c) => c && document.documentElement.style.setProperty("--accent", c)).catch(() => {});
   $("save").onclick = async () => {
     const c = { ...cfg, keys: [0, 1, 2].map((i) => $("k" + i).value), scale: +$("scale").value, autostart: $("auto").checked, notify_updates: $("upd").checked };
     try { cfg = await invoke("set_config", { cfg: c }); $("msg").textContent = "Salvo."; }

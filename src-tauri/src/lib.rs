@@ -54,13 +54,14 @@ async fn run_action(action_id: String, paths: Vec<String>) -> Result<Vec<String>
     .map_err(|e| e.to_string())?
 }
 
-/// Cor de acento do Windows (#rrggbb), lida de HKCU\Software\Microsoft\Windows\DWM\AccentColor (ABGR).
 #[cfg(not(windows))]
 #[tauri::command]
 fn accent_color() -> Option<String> {
     None
 }
 
+/// Cor de acento do Windows (#rrggbb), lida de HKCU\Software\Microsoft\Windows\DWM\AccentColor (ABGR).
+/// A interface não consulta este comando: as telas seguem a paleta da logo.
 #[cfg(windows)]
 #[tauri::command]
 fn accent_color() -> Option<String> {

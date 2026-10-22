@@ -3,13 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <title>ShiftDrop</title>
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div id="root">
       <svg id="wheel" viewBox="-126 -126 252 252" width="290" height="290"></svg>
       <div id="pill"></div>
-      <div id="empty" hidden></div>
+      <div id="empty" hidden>
+        <img class="empty-logo" src="logo.svg" alt="" width="48" height="48" />
+        <p id="empty-text"></p>
+      </div>
     </div>
     <script src="main.js"></script>
   </body>

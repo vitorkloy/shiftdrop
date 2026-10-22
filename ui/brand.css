@@ -1,0 +1,45 @@
+/* Paleta da logo. Claro usa o anel; escuro usa o fundo #262626. */
+:root {
+  color-scheme: light dark;
+  --bg: #262626;
+  --panel-0: #0A84FF;
+  --panel-1: #0056B3;
+  --highlight: #60A5FA;
+  --ring-0: #FFFFFF;
+  --ring-1: #D1D5DB;
+  --core-0: #0066FF;
+  --core-1: #0040A8;
+  --icon: #FFFFFF;
+
+  --accent: var(--core-0);
+  --surface: var(--ring-0);
+  --surface-2: var(--ring-1);
+  --text: var(--bg);
+  --text-off: rgba(38, 38, 38, .36);
+  --disc: var(--ring-1);
+  --disc-stroke: rgba(38, 38, 38, .10);
+  --hub-ring: rgba(38, 38, 38, .035);
+  --hub: var(--ring-0);
+  --petal: var(--ring-0);
+  --petal-stroke: rgba(38, 38, 38, .075);
+  --pill: var(--ring-0);
+  --pill-stroke: rgba(38, 38, 38, .07);
+  --card: var(--ring-0);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: var(--panel-0);
+    --surface: var(--bg);
+    --text: var(--icon);
+    --text-off: rgba(255, 255, 255, .36);
+    --disc: var(--bg);
+    --disc-stroke: rgba(255, 255, 255, .09);
+    --hub-ring: rgba(255, 255, 255, .03);
+    --hub: var(--bg);
+    --petal: var(--bg);
+    --petal-stroke: rgba(255, 255, 255, .07);
+    --pill: var(--bg);
+    --pill-stroke: rgba(209, 213, 219, .18);
+    --card: var(--bg);
+  }
+}

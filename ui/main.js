@@ -1,7 +1,7 @@
 // Roda do ShiftDrop: forma/layout do Tangerine, acabamento Windows 11
-// (tema claro/escuro do sistema, cor de acento, Segoe UI Variable, Segoe Fluent Icons).
+// (tema claro/escuro do sistema, paleta da logo, Segoe UI Variable, Segoe Fluent Icons).
 // Três rodas: Shift = Convert formats, Ctrl = File tools, Alt = File actions.
-// Sem botões magnéticos nem cursor customizado: só o setor sob o cursor fica laranja.
+// Sem botões magnéticos nem cursor customizado: o setor sob o cursor usa o núcleo azul.
 const T = window.__TAURI__;
 const invoke = T.core.invoke;
 // Listeners registrados antes de avisar o Rust (eventos da fila só vão depois).
@@ -36,11 +36,6 @@ const GLYPH = {
   copyPath: "\uE71B", openTerminal: "\uE756",
 };
 
-// Cor de acento do Windows (fallback: laranja do Tangerine).
-invoke("accent_color").then((c) => {
-  if (c) document.documentElement.style.setProperty("--accent", c);
-  console.log(`acento do sistema: ${c || "(padrão laranja)"}`);
-}).catch(() => {});
 const VIEW = 252;           // unidades do viewBox (−126…126)
 // Tamanho real da janela (Rust aplica SHIFTDROP_SCALE, padrão 0.75 × 290 px).
 let PX = 290, S = PX / VIEW;
@@ -114,26 +109,30 @@ function centerOrOut(pos) {
 
 // ---------- desenho ----------
 const DEFS = `<defs>
+  <linearGradient id="brand-core" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0066FF"/>
+    <stop offset="1" stop-color="#0040A8"/>
+  </linearGradient>
   <radialGradient id="glass-fill" cx="0" cy="0" r="${M.outer}" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#ffffff" stop-opacity=".8"/>
-    <stop offset=".68" stop-color="#f3f6f7" stop-opacity=".58"/>
-    <stop offset="1" stop-color="#f4f6f6" stop-opacity=".75"/>
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity=".8"/>
+    <stop offset=".68" stop-color="#D1D5DB" stop-opacity=".58"/>
+    <stop offset="1" stop-color="#FFFFFF" stop-opacity=".75"/>
   </radialGradient>
   <filter id="relief" x="-20%" y="-20%" width="140%" height="140%">
     <feComponentTransfer in="SourceAlpha" result="inv"><feFuncA type="table" tableValues="1 0"/></feComponentTransfer>
     <feGaussianBlur in="inv" stdDeviation="2.4" result="ib"/>
     <feOffset in="ib" dy="-1.6" result="io"/>
-    <feFlood flood-color="#71808a" flood-opacity=".24"/>
+    <feFlood flood-color="#0056B3" flood-opacity=".24"/>
     <feComposite in2="io" operator="in"/>
     <feComposite in2="SourceAlpha" operator="in" result="inner"/>
     <feGaussianBlur in="SourceAlpha" stdDeviation="1.3" result="db"/>
     <feOffset in="db" dy="1.1" result="do"/>
-    <feFlood flood-color="#26343a" flood-opacity=".10"/>
+    <feFlood flood-color="#262626" flood-opacity=".10"/>
     <feComposite in2="do" operator="in" result="drop"/>
     <feMerge><feMergeNode in="drop"/><feMergeNode in="SourceGraphic"/><feMergeNode in="inner"/></feMerge>
   </filter>
   <filter id="hubshadow" x="-30%" y="-30%" width="160%" height="160%">
-    <feDropShadow dx="0" dy="1.2" stdDeviation="1.8" flood-color="#26343a" flood-opacity=".14"/>
+    <feDropShadow dx="0" dy="1.2" stdDeviation="1.8" flood-color="#262626" flood-opacity=".14"/>
   </filter>
 </defs>`;
 
@@ -166,7 +165,7 @@ function render() {
   empty.hidden = n > 0 || !data;
   if (!n && data) {
     const other = { convert: "Ctrl para ferramentas ou Alt para ações", tools: "Shift para converter ou Alt para ações", actions: "Shift para converter" };
-    empty.textContent = `${mode === "convert" ? "Sem conversões" : "Sem ferramentas"} para este formato. Toque ${other[mode]}.`;
+    document.getElementById("empty-text").textContent = `${mode === "convert" ? "Sem conversões" : "Sem ferramentas"} para este formato. Toque ${other[mode]}.`;
   }
   updatePill();
 }

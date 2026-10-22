@@ -3,20 +3,24 @@
 <head>
 <meta charset="utf-8" />
 <title>ShiftDrop — Atualização</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="brand.css" />
 <style>
-  :root { color-scheme: light dark; --accent: #ff5500; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 14px; }
-  body { margin: 0; padding: 18px 20px; background: Canvas; color: CanvasText; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+  body { margin: 0; padding: 18px 20px; background: var(--surface); color: var(--text); display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-weight: 600; }
+  .brand img { width: 36px; height: 36px; border-radius: 8px; }
   h1 { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
-  #notes { flex: 1; overflow: auto; white-space: pre-wrap; font-size: 13px; line-height: 1.45; opacity: .9; margin: 0 0 14px; }
+  #notes { flex: 1; overflow: auto; white-space: pre-wrap; font-size: 13px; line-height: 1.45; opacity: .9; margin: 0 0 14px; font-family: inherit; }
   .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   #msg { font-size: 12px; opacity: .8; }
   button { border: 0; border-radius: 6px; padding: 7px 16px; font: inherit; cursor: pointer; }
-  #go { background: var(--accent); color: white; }
-  #later { background: color-mix(in srgb, CanvasText 12%, Canvas); color: CanvasText; }
+  #go { background: var(--accent); color: var(--icon); }
+  #later { background: var(--surface-2); color: var(--bg); }
   button:disabled { opacity: .55; cursor: default; }
 </style>
 </head>
 <body>
+<div class="brand"><img src="logo.svg" alt="" width="36" height="36" />ShiftDrop</div>
 <h1 id="title">Atualização</h1>
 <pre id="notes">Procurando…</pre>
 <div class="foot">
@@ -30,7 +34,6 @@
   const invoke = window.__TAURI__.core.invoke;
   const win = window.__TAURI__.window.getCurrentWindow();
   const $ = (id) => document.getElementById(id);
-  invoke("accent_color").then((c) => c && document.documentElement.style.setProperty("--accent", c)).catch(() => {});
   $("later").onclick = () => win.close();
   invoke("pending_update").then((p) => {
     if (!p) { $("title").textContent = "ShiftDrop"; $("notes").textContent = "Nenhuma atualização no momento."; $("go").disabled = true; return; }

@@ -3,18 +3,22 @@
 <head>
 <meta charset="utf-8" />
 <title>ShiftDrop</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="brand.css" />
 <style>
-  :root { color-scheme: light dark; --accent: #ff5500; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 14px; }
-  body { margin: 0; padding: 18px 20px; background: Canvas; color: CanvasText; }
+  body { margin: 0; padding: 18px 20px; background: var(--surface); color: var(--text); font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-weight: 600; }
+  .brand img { width: 36px; height: 36px; border-radius: 8px; }
   h1 { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
   p { margin: 0 0 16px; line-height: 1.45; opacity: .9; }
   .foot { display: flex; justify-content: flex-end; gap: 8px; }
   button { border: 0; border-radius: 6px; padding: 7px 16px; font: inherit; cursor: pointer; }
-  #yes { background: var(--accent); color: white; }
-  #no { background: color-mix(in srgb, CanvasText 12%, Canvas); color: CanvasText; }
+  #yes { background: var(--accent); color: var(--icon); }
+  #no { background: var(--surface-2); color: var(--bg); }
 </style>
 </head>
 <body>
+<div class="brand"><img src="logo.svg" alt="" width="36" height="36" />ShiftDrop</div>
 <h1>Avisar atualizações?</h1>
 <p>Quando sair uma versão nova no GitHub, o ShiftDrop pode mandar uma notificação. Dá para mudar depois em Configurações.</p>
 <div class="foot">
@@ -23,7 +27,6 @@
 </div>
 <script>
   const invoke = window.__TAURI__.core.invoke;
-  invoke("accent_color").then((c) => c && document.documentElement.style.setProperty("--accent", c)).catch(() => {});
   const pick = (enabled) => invoke("set_notify_updates", { enabled }).catch(() => {});
   document.getElementById("yes").onclick = () => pick(true);
   document.getElementById("no").onclick = () => pick(false);
