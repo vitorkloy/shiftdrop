@@ -1,14 +1,14 @@
-/* Paleta da logo. Claro usa o anel; escuro usa o fundo #262626. */
+/* Paleta da logo. Claro usa o anel; o SVG é transparente e o escuro continua em #262626. */
 :root {
   color-scheme: light dark;
   --bg: #262626;
-  --panel-0: #0A84FF;
-  --panel-1: #0056B3;
-  --highlight: #60A5FA;
+  --panel-0: #3EB6F5;
+  --panel-1: #1B8EE3;
+  --highlight: #8FD6FB;
   --ring-0: #FFFFFF;
-  --ring-1: #D1D5DB;
-  --core-0: #0066FF;
-  --core-1: #0040A8;
+  --ring-1: #B9C0C9;
+  --core-0: #2E8CFF;
+  --core-1: #0749A8;
   --icon: #FFFFFF;
 
   --accent: var(--core-0);

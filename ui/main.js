@@ -70,6 +70,8 @@ let hover = -1;
 let paths = [];
 let busy = false;
 let dropped = false;
+let open = false;
+let cancelled = false;
 let token = 0;
 let hideTimer = null;
 
@@ -110,19 +112,19 @@ function centerOrOut(pos) {
 // ---------- desenho ----------
 const DEFS = `<defs>
   <linearGradient id="brand-core" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#0066FF"/>
-    <stop offset="1" stop-color="#0040A8"/>
+    <stop offset="0" stop-color="#2E8CFF"/>
+    <stop offset="1" stop-color="#0749A8"/>
   </linearGradient>
   <radialGradient id="glass-fill" cx="0" cy="0" r="${M.outer}" gradientUnits="userSpaceOnUse">
     <stop offset="0" stop-color="#FFFFFF" stop-opacity=".8"/>
-    <stop offset=".68" stop-color="#D1D5DB" stop-opacity=".58"/>
+    <stop offset=".68" stop-color="#B9C0C9" stop-opacity=".58"/>
     <stop offset="1" stop-color="#FFFFFF" stop-opacity=".75"/>
   </radialGradient>
   <filter id="relief" x="-20%" y="-20%" width="140%" height="140%">
     <feComponentTransfer in="SourceAlpha" result="inv"><feFuncA type="table" tableValues="1 0"/></feComponentTransfer>
     <feGaussianBlur in="inv" stdDeviation="2.4" result="ib"/>
     <feOffset in="ib" dy="-1.6" result="io"/>
-    <feFlood flood-color="#0056B3" flood-opacity=".24"/>
+    <feFlood flood-color="#1B8EE3" flood-opacity=".24"/>
     <feComposite in2="io" operator="in"/>
     <feComposite in2="SourceAlpha" operator="in" result="inner"/>
     <feGaussianBlur in="SourceAlpha" stdDeviation="1.3" result="db"/>
@@ -208,10 +210,18 @@ function applyMode(m, animate = true) {
 
 // ---------- ciclo de vida ----------
 function hide() {
+  if (!open) return;
+  open = false;
   clearTimeout(hideTimer);
   root.classList.remove("in");
   busy = false; hover = -1; paths = [];
   invoke("hide_radial");
+}
+function cancelWheel() {
+  if (!open || busy) return;
+  cancelled = true;
+  dropped = true;
+  hide();
 }
 function hideSoon(ms) { clearTimeout(hideTimer); hideTimer = setTimeout(hide, ms); }
 
@@ -244,6 +254,7 @@ async function onEnter(p) {
 
 async function onDrop(p, idx) {
   dropped = true;
+  if (cancelled) return hide();
   const it = items[idx];
   console.log(`drop: roda=${mode} setor=${idx} ação=${it ? it.id : "-"} arquivos=${JSON.stringify(p)}`);
   if (idx < 0 || !it) return hideSoon(120);
@@ -287,7 +298,8 @@ listen("radial-show", (e) => {
   const manual = !!(e.payload && e.payload.manual);
   console.log(`radial-show manual=${manual}`);
   token++;
-  data = null; paths = []; busy = false; dropped = false; hover = -1;
+  open = true;
+  data = null; paths = []; busy = false; dropped = false; cancelled = false; hover = -1;
   mode = "convert";
   items = [];
   render();
@@ -312,13 +324,17 @@ listen("radial-preview", async (e) => {
   setHover(e.payload.hover);
 });
 
-listen("sd-cancel", () => { if (!busy) hide(); });
+listen("sd-cancel", () => cancelWheel());
 
 listen("gesture-end", () => {
   setTimeout(() => { if (!dropped && !busy) hide(); }, 600);
 });
 
-window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !busy) hide(); });
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !open || busy) return;
+  e.preventDefault();
+  cancelWheel();
+});
 
 fit();
 render();

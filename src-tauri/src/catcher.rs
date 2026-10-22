@@ -15,7 +15,7 @@ mod imp {
     use std::ffi::OsString;
     use std::os::windows::ffi::OsStringExt;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};
     use std::sync::OnceLock;
     use tauri::AppHandle;
     use windows::core::{implement, w, Ref, PCWSTR};
@@ -37,6 +37,10 @@ mod imp {
     static HWND_VAL: AtomicIsize = AtomicIsize::new(0);
     static CENTER_R: AtomicU32 = AtomicU32::new(50);
     static APP: OnceLock<AppHandle> = OnceLock::new();
+    /// Esc durante o arraste: o drop seguinte não vira ação, e a janela-alvo
+    /// fica até o botão soltar (senão o Explorer recebe o Shift e move o arquivo).
+    static SUPPRESS_DROP: AtomicBool = AtomicBool::new(false);
+    static HOLD_CATCHER: AtomicBool = AtomicBool::new(false);
 
     fn hwnd() -> Option<HWND> {
         let v = HWND_VAL.load(Ordering::Relaxed);
@@ -111,6 +115,11 @@ mod imp {
             Ok(())
         }
         fn Drop(&self, data: Ref<'_, IDataObject>, _keys: MODIFIERKEYS_FLAGS, pt: &POINTL, effect: *mut DROPEFFECT) -> windows::core::Result<()> {
+            if SUPPRESS_DROP.swap(false, Ordering::Relaxed) {
+                log(format!("catcher: Drop em ({},{}) cancelado pelo Esc", pt.x, pt.y));
+                unsafe { *effect = DROPEFFECT_COPY };
+                return Ok(());
+            }
             let paths = unsafe { paths_of(data) };
             log(format!("catcher: Drop em ({},{}) arquivos={:?}", pt.x, pt.y, paths));
             dispatch("drop", paths.unwrap_or_default(), rel(pt));
@@ -220,17 +229,41 @@ mod imp {
         });
     }
 
-    pub fn hide(app: &AppHandle) {
-        let _ = app.run_on_main_thread(|| unsafe {
+    fn hide_hwnd() {
+        unsafe {
             if let Some(hw) = hwnd() {
                 let _ = ShowWindow(hw, SW_HIDE);
             }
+        }
+    }
+
+    pub fn hide(app: &AppHandle) {
+        let _ = app.run_on_main_thread(|| {
+            if HOLD_CATCHER.load(Ordering::Relaxed) {
+                return;
+            }
+            hide_hwnd();
         });
+    }
+
+    pub fn arm_escape_cancel() {
+        SUPPRESS_DROP.store(true, Ordering::Relaxed);
+        HOLD_CATCHER.store(true, Ordering::Relaxed);
+    }
+
+    pub fn clear_suppress() {
+        SUPPRESS_DROP.store(false, Ordering::Relaxed);
+    }
+
+    pub fn finish_hold(app: &AppHandle) {
+        if HOLD_CATCHER.swap(false, Ordering::Relaxed) {
+            let _ = app.run_on_main_thread(hide_hwnd);
+        }
     }
 }
 
 #[cfg(windows)]
-pub use imp::{hide, init, show};
+pub use imp::{arm_escape_cancel, clear_suppress, finish_hold, hide, init, show};
 
 #[cfg(not(windows))]
 pub fn init(_app: &AppHandle) {}
@@ -238,3 +271,9 @@ pub fn init(_app: &AppHandle) {}
 pub fn show(_app: &AppHandle, _x: i32, _y: i32, _w: i32, _h: i32, _scale: f64) {}
 #[cfg(not(windows))]
 pub fn hide(_app: &AppHandle) {}
+#[cfg(not(windows))]
+pub fn arm_escape_cancel() {}
+#[cfg(not(windows))]
+pub fn clear_suppress() {}
+#[cfg(not(windows))]
+pub fn finish_hold(_app: &AppHandle) {}

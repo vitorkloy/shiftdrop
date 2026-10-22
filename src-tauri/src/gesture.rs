@@ -111,10 +111,12 @@ mod imp {
     use super::show_radial;
     use std::sync::mpsc::{channel, Sender};
     use std::sync::OnceLock;
-    use tauri::AppHandle;
+    use tauri::{AppHandle, Manager};
     use windows_sys::Win32::Foundation::{CloseHandle, LPARAM, LRESULT, POINT, WPARAM};
     use windows_sys::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION};
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_MENU, VK_RCONTROL, VK_RMENU, VK_RSHIFT, VK_SHIFT};
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_CONTROL, VK_ESCAPE, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_MENU, VK_RCONTROL, VK_RMENU, VK_RSHIFT, VK_SHIFT,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, DispatchMessageW, GetAncestor, GetCursorPos, GetMessageW, GetWindowThreadProcessId, SetWindowsHookExW,
         TranslateMessage, WindowFromPoint, GA_ROOT, KBDLLHOOKSTRUCT, MSG, MSLLHOOKSTRUCT, WH_KEYBOARD_LL, WH_MOUSE_LL, WM_KEYDOWN,
@@ -235,13 +237,21 @@ mod imp {
     }
 
     unsafe extern "system" fn keyboard(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-        if code >= 0 && (wp as u32 == WM_KEYDOWN || wp as u32 == WM_SYSKEYDOWN) && DOWN.load(std::sync::atomic::Ordering::Relaxed) {
+        if code >= 0 && (wp as u32 == WM_KEYDOWN || wp as u32 == WM_SYSKEYDOWN) {
             let k = &*(lp as *const KBDLLHOOKSTRUCT);
-            if let Some(tx) = TX.get() {
-                let _ = tx.send(Ev::Key(generic(k.vkCode as u16)));
+            let vk = generic(k.vkCode as u16);
+            // Esc chega mesmo sem o botão do mouse (preview / menu da bandeja).
+            if DOWN.load(std::sync::atomic::Ordering::Relaxed) || vk == VK_ESCAPE {
+                if let Some(tx) = TX.get() {
+                    let _ = tx.send(Ev::Key(vk));
+                }
             }
         }
         CallNextHookEx(std::ptr::null_mut(), code, wp, lp)
+    }
+
+    fn radial_visible(app: &AppHandle) -> bool {
+        app.get_webview_window("radial").and_then(|w| w.is_visible().ok()).unwrap_or(false)
     }
 
     pub fn spawn(app: AppHandle) {
@@ -284,6 +294,7 @@ mod imp {
                             armed = is_file_source(x, y);
                             shown = false;
                             keys = wheel_keys();
+                            crate::catcher::clear_suppress();
                             if armed {
                                 crate::ui::warm(&app);
                             }
@@ -303,6 +314,17 @@ mod imp {
                                 );
                             } else {
                                 crate::ui::warm(&app);
+                            }
+                        }
+                        Ev::Key(vk) if vk == VK_ESCAPE => {
+                            let dragging = DOWN.load(std::sync::atomic::Ordering::Relaxed);
+                            if shown || radial_visible(&app) {
+                                if dragging {
+                                    crate::catcher::arm_escape_cancel();
+                                    shown = false;
+                                }
+                                crate::logx::log("gesto: Esc fecha a roda");
+                                crate::ui::emit(&app, "sd-cancel", serde_json::json!(null));
                             }
                         }
                         Ev::Key(vk) if armed => {
@@ -329,6 +351,7 @@ mod imp {
                         }
                         Ev::Up => {
                             armed = false;
+                            crate::catcher::finish_hold(&app);
                             if shown {
                                 shown = false;
                                 crate::ui::emit(&app, "gesture-end", serde_json::json!(null));
@@ -412,19 +435,33 @@ mod imp {
                 return;
             };
             crate::logx::log("gesto: thread de detecção iniciada (device_query, 15 ms)");
-            let (mut down, mut shown, mut origin, mut prev) = (false, false, (0, 0), [false; 3]);
+            let (mut down, mut shown, mut origin, mut prev, mut esc) = (false, false, (0, 0), [false; 3], false);
             loop {
                 // 15 ms só com o botão pressionado; ocioso, 120 ms (quase zero CPU).
                 std::thread::sleep(Duration::from_millis(if down { 15 } else { 120 }));
                 let m = dev.get_mouse();
                 let left = m.button_pressed.get(1).copied().unwrap_or(false);
-                let now = keyset(&dev.get_keys());
+                let pressed_keys = dev.get_keys();
+                let now = keyset(&pressed_keys);
+                let esc_now = pressed_keys.iter().any(|k| *k == Keycode::Escape);
+                let wheel_open = shown
+                    || app.get_webview_window("radial").and_then(|w| w.is_visible().ok()).unwrap_or(false);
+                if esc_now && !esc && wheel_open {
+                    if down {
+                        crate::catcher::arm_escape_cancel();
+                        shown = false;
+                    }
+                    crate::logx::log("gesto: Esc fecha a roda");
+                    crate::ui::emit(&app, "sd-cancel", serde_json::json!(null));
+                }
+                esc = esc_now;
                 let tapped = (0..3).find(|&i| now[i] && !prev[i]);
                 let held = (0..3).find(|&i| now[i]);
                 prev = now;
                 if left && !down {
                     down = true;
                     origin = m.coords;
+                    crate::catcher::clear_suppress();
                 } else if left && down {
                     if !shown {
                         if let Some(k) = held {
@@ -442,6 +479,7 @@ mod imp {
                     }
                 } else if !left && down {
                     down = false;
+                    crate::catcher::finish_hold(&app);
                     if shown {
                         shown = false;
                         crate::ui::emit(&app, "gesture-end", serde_json::json!(null));

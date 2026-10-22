@@ -175,7 +175,7 @@ pub fn open_notify(app: &AppHandle) {
     std::thread::spawn(move || {
         let _ = tauri::WebviewWindowBuilder::new(&app, "notify", tauri::WebviewUrl::App("notify.html".into()))
             .title("ShiftDrop")
-            .inner_size(400.0, 210.0)
+            .inner_size(420.0, 244.0)
             .resizable(false)
             .maximizable(false)
             .minimizable(false)
