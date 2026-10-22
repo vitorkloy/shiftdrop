@@ -231,8 +231,10 @@ pub fn run() {
             ));
             logx::log(format!("ferramentas: {:?}", tools::Tools::detect()));
             logx::log(format!("roda: escala {} (criada sob demanda)", gesture::ui_scale()));
+            // Sem config.json: primeira vez neste PC (atualização e reinício já têm o arquivo).
+            let first_run = !config::path().is_file();
             // 1ª execução: liga "iniciar com o sistema" conforme a config.
-            if !config::path().is_file() {
+            if first_run {
                 use tauri_plugin_autostart::ManagerExt;
                 let c = config::get();
                 if c.autostart {
@@ -267,7 +269,9 @@ pub fn run() {
                     }
                 }
                 gesture::preview(app.handle(), paths, hover, mode);
-            } else if args.first().map(|a| a == "settings").unwrap_or(false) {
+            } else if args.first().map(|a| a == "settings").unwrap_or(false)
+                || (first_run && args.first().map(|a| a != "selftest-drag").unwrap_or(true))
+            {
                 ui::open_settings(app.handle());
             } else if args.first().map(|a| a == "selftest-drag").unwrap_or(false) && args.len() >= 2 {
                 selftest::start(app.handle(), args[1].clone(), args.iter().any(|a| a == "--drop"));
