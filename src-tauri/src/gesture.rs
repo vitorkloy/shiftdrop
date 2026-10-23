@@ -1,11 +1,12 @@
 //! Detecção do gesto "arrastar arquivo segurando uma tecla".
 //!
 //! No Windows, hooks de baixo nível (WH_MOUSE_LL + WH_KEYBOARD_LL) numa thread
-//! com loop de mensagens: ocioso, a CPU fica em zero. No macOS e no Linux, uma
-//! thread consulta mouse e modificadores (device_query) — 15 ms com o botão
-//! pressionado, 120 ms ocioso. A tecla de cada roda vem da config
-//! (SHIFTDROP_KEYS ainda ganha). A janela da roda é um drop target: o usuário
-//! solta o arquivo em cima da opção desejada.
+//! com loop de mensagens: ocioso, a CPU fica em zero. No macOS, um CGEventTap
+//! (mouse down/drag/up e modificadores) — o polling do botão mente durante um
+//! arraste do Finder e exige Acessibilidade. No Linux, uma thread consulta
+//! mouse e modificadores (device_query) — 15 ms com o botão pressionado, 120 ms
+//! ocioso. A tecla de cada roda vem da config (SHIFTDROP_KEYS ainda ganha). A
+//! janela da roda é um drop target: o usuário solta o arquivo em cima da opção.
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
 
 pub fn show_radial(app: &AppHandle, x: i32, y: i32, manual: bool) -> bool {
@@ -100,6 +101,24 @@ pub fn show_at_cursor(app: &AppHandle) {
 
 pub fn spawn(app: AppHandle) {
     imp::spawn(app);
+}
+
+/// `Some` só no macOS: a permissão de Acessibilidade está concedida?
+pub fn accessibility_status() -> Option<bool> {
+    #[cfg(target_os = "macos")]
+    {
+        Some(imp::trusted())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
+/// Diálogo do sistema e o painel Acessibilidade. No-op fora do macOS.
+pub fn open_accessibility_settings() {
+    #[cfg(target_os = "macos")]
+    imp::open_accessibility_settings();
 }
 
 /// Windows: hooks de baixo nível (WH_MOUSE_LL + WH_KEYBOARD_LL) numa thread com
@@ -365,11 +384,11 @@ mod imp {
     }
 }
 
-/// macOS / Linux: consulta o estado global de mouse e teclado a cada 15 ms
-/// (device_query: CoreGraphics no macOS, X11/XWayland no Linux). Sem fonte de
-/// processo (abre de qualquer app). Em Wayland puro sem XWayland não há leitura
-/// global: fica só o atalho da bandeja ("Abrir menu aqui").
-#[cfg(not(windows))]
+/// Linux: consulta o estado global de mouse e teclado a cada 15 ms
+/// (device_query, X11/XWayland). Sem fonte de processo (abre de qualquer app).
+/// Em Wayland puro sem XWayland não há leitura global: fica só o atalho da
+/// bandeja ("Abrir menu aqui").
+#[cfg(target_os = "linux")]
 mod imp {
     use super::show_radial;
     use device_query::{DeviceQuery, DeviceState, Keycode};
@@ -382,13 +401,7 @@ mod imp {
     fn modifier_down(name: &str, pressed: &[Keycode]) -> bool {
         let has = |a: &[Keycode]| a.iter().any(|x| pressed.contains(x));
         match name {
-            "ctrl" | "control" => {
-                let mut ks = vec![Keycode::LControl, Keycode::RControl];
-                if cfg!(target_os = "macos") {
-                    ks.extend([Keycode::Command, Keycode::LMeta, Keycode::RMeta]);
-                }
-                has(&ks)
-            }
+            "ctrl" | "control" => has(&[Keycode::LControl, Keycode::RControl]),
             "alt" => has(&[Keycode::LAlt, Keycode::RAlt, Keycode::LOption, Keycode::ROption]),
             _ => has(&[Keycode::LShift, Keycode::RShift]),
         }
@@ -407,19 +420,8 @@ mod imp {
         DeviceState::checked_new()
     }
 
-    /// CoreGraphics devolve pontos (lógicos); a janela trabalha em pixels físicos.
-    /// Sem a roda criada, usa a escala do monitor principal (no Linux o valor já é físico).
-    pub fn to_screen(app: &AppHandle, (x, y): (i32, i32)) -> (i32, i32) {
-        if cfg!(target_os = "macos") {
-            let s = app
-                .get_webview_window("radial")
-                .and_then(|w| w.scale_factor().ok())
-                .or_else(|| app.primary_monitor().ok().flatten().map(|m| m.scale_factor()))
-                .unwrap_or(1.0);
-            ((x as f64 * s) as i32, (y as f64 * s) as i32)
-        } else {
-            (x, y)
-        }
+    pub fn to_screen(_app: &AppHandle, pos: (i32, i32)) -> (i32, i32) {
+        pos
     }
 
     pub fn cursor_pos() -> (i32, i32) {
@@ -487,5 +489,264 @@ mod imp {
                 }
             }
         });
+    }
+}
+
+/// macOS: CGEventTap em modo escuta. `NSEvent.pressedMouseButtons` (o que o
+/// `device_query` consulta) fica solto no meio de um arraste de arquivo, então
+/// o limiar de movimento nunca era atingido com o botão "pressionado". O tap
+/// entrega leftMouseDragged enquanto o botão segue seguro. Sem Acessibilidade
+/// o tap volta nulo; pedimos a permissão e tentamos de novo.
+#[cfg(target_os = "macos")]
+mod imp {
+    use super::show_radial;
+    use std::ffi::c_void;
+    use std::sync::atomic::{AtomicPtr, Ordering};
+    use std::sync::mpsc::{channel, Sender};
+    use tauri::{AppHandle, Manager};
+
+    const THRESHOLD: i32 = 12;
+    const MODES: [&str; 3] = ["convert", "tools", "actions"];
+    const SHIFT: u64 = 0x0002_0000;
+    const CONTROL: u64 = 0x0004_0000;
+    const OPTION: u64 = 0x0008_0000;
+    const COMMAND: u64 = 0x0010_0000;
+    const LEFT_DOWN: u32 = 1;
+    const LEFT_UP: u32 = 2;
+    const LEFT_DRAGGED: u32 = 6;
+    const KEY_DOWN: u32 = 10;
+    const FLAGS_CHANGED: u32 = 12;
+    const KEYCODE_FIELD: u32 = 9;
+    const ESCAPE: i64 = 53;
+    const TAP_DISABLED_TIMEOUT: u32 = 0xFFFF_FFFE;
+    const TAP_DISABLED_USER: u32 = 0xFFFF_FFFF;
+
+    #[repr(C)]
+    struct CGPoint {
+        x: f64,
+        y: f64,
+    }
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventTapCreate(
+            tap: u32,
+            place: u32,
+            options: u32,
+            events: u64,
+            callback: unsafe extern "C" fn(*mut c_void, u32, *mut c_void, *mut c_void) -> *mut c_void,
+            user_info: *mut c_void,
+        ) -> *mut c_void;
+        fn CGEventTapEnable(tap: *mut c_void, enable: u8);
+        fn CGEventGetLocation(event: *mut c_void) -> CGPoint;
+        fn CGEventGetFlags(event: *mut c_void) -> u64;
+        fn CGEventGetIntegerValueField(event: *mut c_void, field: u32) -> i64;
+        fn CGEventCreate(source: *mut c_void) -> *mut c_void;
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        static kCFRunLoopCommonModes: *const c_void;
+        fn CFMachPortCreateRunLoopSource(allocator: *const c_void, port: *mut c_void, order: isize) -> *mut c_void;
+        fn CFRunLoopAddSource(rl: *mut c_void, source: *mut c_void, mode: *const c_void);
+        fn CFRunLoopGetCurrent() -> *mut c_void;
+        fn CFRunLoopRun();
+        fn CFRelease(cf: *const c_void);
+    }
+
+    static TAP: AtomicPtr<c_void> = AtomicPtr::new(std::ptr::null_mut());
+
+    enum Ev {
+        Down(i32, i32, u64),
+        Move(i32, i32, u64),
+        Up,
+        Esc,
+    }
+
+    pub fn trusted() -> bool {
+        macos_accessibility_client::accessibility::application_is_trusted()
+    }
+
+    pub fn open_accessibility_settings() {
+        let _ = macos_accessibility_client::accessibility::application_is_trusted_with_prompt();
+        let _ = std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility")
+            .spawn();
+    }
+
+    fn held(flags: u64) -> [bool; 3] {
+        let k = crate::config::keys();
+        let one = |name: &str| match name {
+            "ctrl" | "control" => flags & (CONTROL | COMMAND) != 0,
+            "alt" => flags & OPTION != 0,
+            _ => flags & SHIFT != 0,
+        };
+        [one(&k[0]), one(&k[1]), one(&k[2])]
+    }
+
+    unsafe extern "C" fn tap_cb(_proxy: *mut c_void, ty: u32, event: *mut c_void, user: *mut c_void) -> *mut c_void {
+        if ty == TAP_DISABLED_TIMEOUT || ty == TAP_DISABLED_USER {
+            let port = TAP.load(Ordering::Relaxed);
+            if !port.is_null() {
+                CGEventTapEnable(port, 1);
+            }
+            return event;
+        }
+        if event.is_null() || user.is_null() {
+            return event;
+        }
+        let tx = &*(user as *const Sender<Ev>);
+        let p = CGEventGetLocation(event);
+        let flags = CGEventGetFlags(event);
+        let (x, y) = (p.x.round() as i32, p.y.round() as i32);
+        let ev = match ty {
+            LEFT_DOWN => Some(Ev::Down(x, y, flags)),
+            LEFT_DRAGGED | FLAGS_CHANGED => Some(Ev::Move(x, y, flags)),
+            LEFT_UP => Some(Ev::Up),
+            KEY_DOWN if CGEventGetIntegerValueField(event, KEYCODE_FIELD) == ESCAPE => Some(Ev::Esc),
+            _ => None,
+        };
+        if let Some(ev) = ev {
+            let _ = tx.send(ev);
+        }
+        event
+    }
+
+    /// Pontos lógicos do CoreGraphics → pixels físicos da janela Tauri.
+    pub fn to_screen(app: &AppHandle, (x, y): (i32, i32)) -> (i32, i32) {
+        let s = app
+            .get_webview_window("radial")
+            .and_then(|w| w.scale_factor().ok())
+            .or_else(|| app.primary_monitor().ok().flatten().map(|m| m.scale_factor()))
+            .unwrap_or(1.0);
+        ((x as f64 * s) as i32, (y as f64 * s) as i32)
+    }
+
+    pub fn cursor_pos() -> (i32, i32) {
+        unsafe {
+            let e = CGEventCreate(std::ptr::null_mut());
+            if e.is_null() {
+                return (400, 400);
+            }
+            let p = CGEventGetLocation(e);
+            CFRelease(e);
+            (p.x.round() as i32, p.y.round() as i32)
+        }
+    }
+
+    pub fn poke() {}
+
+    fn run_tap(tx: &Sender<Ev>) {
+        let mask = (1u64 << LEFT_DOWN) | (1u64 << LEFT_UP) | (1u64 << LEFT_DRAGGED) | (1u64 << KEY_DOWN) | (1u64 << FLAGS_CHANGED);
+        let user = tx as *const Sender<Ev> as *mut c_void;
+        let mut logged_denied = false;
+        loop {
+            if !trusted() {
+                if !logged_denied {
+                    logged_denied = true;
+                    crate::logx::log(
+                        "gesto: sem permissão de Acessibilidade — o arraste não abre a roda. Ajustes do Sistema > Privacidade e Segurança > Acessibilidade",
+                    );
+                }
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                continue;
+            }
+            logged_denied = false;
+            unsafe {
+                let port = CGEventTapCreate(0, 0, 1, mask, tap_cb, user);
+                if port.is_null() {
+                    crate::logx::log("gesto: CGEventTap nulo mesmo com Acessibilidade; nova tentativa em 3 s");
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    continue;
+                }
+                TAP.store(port, Ordering::Relaxed);
+                let source = CFMachPortCreateRunLoopSource(std::ptr::null(), port, 0);
+                CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes);
+                CGEventTapEnable(port, 1);
+                crate::logx::log("gesto: CGEventTap ativo (mouse arrastado + modificadores)");
+                CFRunLoopRun();
+                crate::logx::log("gesto: run loop do tap encerrou; recriando");
+            }
+        }
+    }
+
+    pub fn spawn(app: AppHandle) {
+        // O diálogo de Acessibilidade precisa da thread principal (setup do Tauri).
+        if !trusted() {
+            let _ = macos_accessibility_client::accessibility::application_is_trusted_with_prompt();
+        }
+        let (tx, rx) = channel::<Ev>();
+        let tx: &'static Sender<Ev> = Box::leak(Box::new(tx));
+        std::thread::Builder::new()
+            .name("shiftdrop-tap".into())
+            .spawn(|| run_tap(tx))
+            .expect("thread do tap");
+        std::thread::Builder::new()
+            .name("shiftdrop-gesture".into())
+            .spawn(move || {
+                let (mut down, mut shown, mut origin, mut prev) = (false, false, (0, 0), [false; 3]);
+                let reveal = |shown: &mut bool, x: i32, y: i32, k: usize| {
+                    if *shown {
+                        return;
+                    }
+                    let (x, y) = to_screen(&app, (x, y));
+                    if show_radial(&app, x, y, false) {
+                        *shown = true;
+                        crate::logx::log(format!("gesto: arrastar + modificador {k}"));
+                        crate::ui::emit(&app, "wheel-mode", serde_json::json!({ "mode": MODES[k] }));
+                    }
+                };
+                while let Ok(ev) = rx.recv() {
+                    match ev {
+                        Ev::Down(x, y, flags) => {
+                            down = true;
+                            shown = false;
+                            origin = (x, y);
+                            prev = held(flags);
+                            crate::catcher::clear_suppress();
+                            crate::ui::warm(&app);
+                        }
+                        Ev::Move(x, y, flags) if down => {
+                            let now = held(flags);
+                            let moved = {
+                                let (dx, dy) = (x - origin.0, y - origin.1);
+                                dx * dx + dy * dy > THRESHOLD * THRESHOLD
+                            };
+                            if !shown {
+                                if moved {
+                                    if let Some(k) = (0..3).find(|&i| now[i]) {
+                                        reveal(&mut shown, x, y, k);
+                                    }
+                                }
+                            } else if let Some(k) = (0..3).find(|&i| now[i] && !prev[i]) {
+                                crate::ui::emit(&app, "wheel-mode", serde_json::json!({ "mode": MODES[k] }));
+                            }
+                            prev = now;
+                        }
+                        Ev::Esc => {
+                            let open = shown
+                                || app.get_webview_window("radial").and_then(|w| w.is_visible().ok()).unwrap_or(false);
+                            if open {
+                                if down {
+                                    crate::catcher::arm_escape_cancel();
+                                    shown = false;
+                                }
+                                crate::logx::log("gesto: Esc fecha a roda");
+                                crate::ui::emit(&app, "sd-cancel", serde_json::json!(null));
+                            }
+                        }
+                        Ev::Up => {
+                            down = false;
+                            crate::catcher::finish_hold(&app);
+                            if shown {
+                                shown = false;
+                                crate::ui::emit(&app, "gesture-end", serde_json::json!(null));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            })
+            .expect("thread do gesto");
     }
 }

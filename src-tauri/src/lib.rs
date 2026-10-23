@@ -172,6 +172,17 @@ fn hide_radial(app: tauri::AppHandle) {
     gesture::hide_radial(&app);
 }
 
+/// `null` fora do macOS. No macOS, `true` se Acessibilidade já foi concedida.
+#[tauri::command]
+fn accessibility_status() -> Option<bool> {
+    gesture::accessibility_status()
+}
+
+#[tauri::command]
+fn open_accessibility_settings() {
+    gesture::open_accessibility_settings();
+}
+
 /// Miniatura do arquivo como data URL (ou null se não houver).
 #[tauri::command]
 async fn thumbnail(path: String) -> Option<String> {
@@ -219,7 +230,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             js_log, ui_ready, get_config, set_config, set_notify_updates, pending_update, install_update, open_release_page, app_version,
-            accent_color, wheels, list_actions, generic_actions, run_action, hide_radial, thumbnail
+            accent_color, wheels, list_actions, generic_actions, run_action, hide_radial, thumbnail, accessibility_status,
+            open_accessibility_settings
         ])
         .setup(|app| {
             logx::log(format!(

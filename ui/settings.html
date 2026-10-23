@@ -19,8 +19,10 @@
   #avail { margin-top: 14px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 16%, transparent); }
   #avail[hidden] { display: none; }
   #avail-msg { font-size: 13px; font-weight: 600; }
-  #go-upd, #save { border: 0; border-radius: 6px; font: inherit; cursor: pointer; }
-  #go-upd { background: var(--accent); color: var(--icon); padding: 6px 12px; white-space: nowrap; }
+  #go-upd, #save, #access-btn { border: 0; border-radius: 6px; font: inherit; cursor: pointer; }
+  #go-upd, #access-btn { background: var(--accent); color: var(--icon); padding: 6px 12px; white-space: nowrap; }
+  #access { align-items: flex-start; }
+  #access-msg { font-size: 13px; line-height: 1.35; }
   #go-upd:disabled { opacity: .55; cursor: default; }
   #save { background: var(--accent); color: var(--icon); padding: 7px 18px; min-width: 108px; transition: background-color .18s ease; }
   #save:disabled { cursor: default; }
@@ -42,6 +44,10 @@
 <div class="row" id="avail" hidden>
   <span id="avail-msg">Nova versão disponível</span>
   <button id="go-upd" type="button">Atualizar</button>
+</div>
+<div class="row" id="access" hidden>
+  <span id="access-msg">Para a roda abrir ao arrastar, permita Acessibilidade para o ShiftDrop.</span>
+  <button id="access-btn" type="button">Abrir Ajustes</button>
 </div>
 <div class="foot"><span id="msg"></span><button id="save">Salvar</button></div>
 <script>
@@ -70,6 +76,10 @@
       }
     };
   });
+  invoke("accessibility_status").then((ok) => {
+    if (ok === false) $("access").hidden = false;
+  });
+  $("access-btn").onclick = () => invoke("open_accessibility_settings");
   invoke("get_config").then((c) => {
     cfg = c;
     c.keys.forEach((k, i) => ($("k" + i).value = k));

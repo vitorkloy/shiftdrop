@@ -83,7 +83,7 @@ npm run build      # instalador NSIS em src-tauri/target/release/bundle/nsis
 
 ## Como funciona
 
-No Windows, hooks de baixo nível (`WH_MOUSE_LL` e `WH_KEYBOARD_LL`) numa thread com loop de mensagens: ocioso, não há polling. Se o arraste começou no Explorer e uma das teclas foi pressionada, a roda aparece no cursor. Tocar outra tecla troca a roda (evento `wheel-mode`). O WebView da roda só existe enquanto ela é usada e some alguns segundos depois de esconder. No macOS e no Linux a leitura continua por `device_query` (15 ms com o botão pressionado, 120 ms ocioso).
+No Windows, hooks de baixo nível (`WH_MOUSE_LL` e `WH_KEYBOARD_LL`) numa thread com loop de mensagens: ocioso, não há polling. Se o arraste começou no Explorer e uma das teclas foi pressionada, a roda aparece no cursor. Tocar outra tecla troca a roda (evento `wheel-mode`). O WebView da roda só existe enquanto ela é usada e some alguns segundos depois de esconder. No macOS um `CGEventTap` escuta o arraste (o botão consultado por polling some durante o drag do Finder) e pede Acessibilidade. No Linux a leitura continua por `device_query` (15 ms com o botão pressionado, 120 ms ocioso).
 
 O drop é recebido por uma janela nativa própria (`ShiftDropCatcher`, circular, por cima da roda) com um `IDropTarget` que lê o caminho (`CF_HDROP`) já no **DragEnter**, então os setores certos aparecem antes de soltar. Ao abrir, a roda sempre desenha setores genéricos e troca pelos do tipo assim que o arquivo é identificado.
 
@@ -96,7 +96,7 @@ Os builds saem do GitHub Actions (`.github/workflows/release.yml`, `tauri-apps/t
 | Plataforma | Pacote | Gesto | Limitações |
 |---|---|---|---|
 | Windows 10/11 | NSIS `.exe` (WebView2 bootstrapper embutido) | Hooks WH_MOUSE_LL / WH_KEYBOARD_LL + drop target OLE nativo (CF_HDROP) + recorte `SetWindowRgn` | Vidro é CSS (sem Mica/acrylic do DWM), então o visual é igual no Win10 e no Win11. |
-| macOS 11+ | `.dmg` universal (Apple Silicon + Intel) | Leitura global de mouse/modificadores via CoreGraphics (`device_query`); drop pelo drag-drop do Tauri numa janela transparente | Peça permissão em *Ajustes > Privacidade > Monitoramento de Entrada/Acessibilidade*. App não assinado/notarizado: abra com botão direito > Abrir. Ctrl ou ⌘ = File tools, Option = File actions. Sem cor de destaque do sistema (usa laranja). |
+| macOS 11+ | `.dmg` universal (Apple Silicon + Intel) | `CGEventTap` (leftMouseDragged + modificadores; pede Acessibilidade); drop pelo drag-drop do Tauri numa janela transparente | Sem Acessibilidade o gesto não abre a roda — o app pede na primeira execução e em Configurações. App não assinado/notarizado: abra com botão direito > Abrir. Ctrl ou ⌘ = File tools, Option = File actions. Sem cor de destaque do sistema (usa laranja). |
 | Linux | `.deb` e `.AppImage` (webkit2gtk-4.1) | X11/XWayland via `device_query` (`DISPLAY`); drop pelo drag-drop GTK do Tauri | **Wayland puro**: sem leitura global de teclado/mouse, use o item da bandeja "Abrir menu aqui" e arraste o arquivo para a roda. Recorte circular depende do compositor (transparência). |
 
 Comum: o gesto abre a roda a partir de qualquer app (só no Windows existe o filtro por gerenciador de arquivos). COPY/COPY PATH usam `pbcopy` (mac) ou `wl-copy`/`xclip` (Linux); MOVE usa `osascript` / `zenity`/`kdialog`; TERMINAL abre Terminal.app / `x-terminal-emulator`.

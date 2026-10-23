@@ -3613,11 +3613,12 @@ dependencies = [
 
 [[package]]
 name = "shiftdrop"
-version = "0.4.7"
+version = "0.4.8"
 dependencies = [
  "base64 0.22.1",
  "device_query",
  "image",
+ "macos-accessibility-client",
  "serde",
  "serde_json",
  "tauri",
